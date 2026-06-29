@@ -246,6 +246,18 @@ check_duckdb: $(DUCKDB_SOURCES)
 	(cd ${ROOT_DIR}/build/debug/mvp && make clean) || true
 	(cd ${ROOT_DIR}/build/debug/eh && make clean) || true
 	(cd ${ROOT_DIR}/build/debug/coi && make clean) || true
+	(cd ${ROOT_DIR}/build/dev/mvp64 && make clean) || true
+	(cd ${ROOT_DIR}/build/dev/eh64 && make clean) || true
+	(cd ${ROOT_DIR}/build/dev/coi64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relsize/mvp64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relsize/eh64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relsize/coi64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relperf/mvp64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relperf/eh64 && make clean) || true
+	(cd ${ROOT_DIR}/build/relperf/coi64 && make clean) || true
+	(cd ${ROOT_DIR}/build/debug/mvp64 && make clean) || true
+	(cd ${ROOT_DIR}/build/debug/eh64 && make clean) || true
+	(cd ${ROOT_DIR}/build/debug/coi64 && make clean) || true
 	touch check_duckdb
 
 wasm_setup: set_environment check_duckdb wrapped_wasm_caches
@@ -276,6 +288,35 @@ wasm_debug: wasm_setup
 	${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh debug coi
 
 wasm: wasm_relperf
+
+.PHONY: wasm64_dev
+wasm64_dev: wasm_setup
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh dev mvp
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh dev eh
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh dev coi
+
+.PHONY: wasm64_relperf
+wasm64_relperf: wasm_setup
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relperf mvp
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relperf eh
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relperf coi
+
+.PHONY: wasm64_relsize
+wasm64_relsize: wasm_setup
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relsize mvp
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relsize eh
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh relsize coi
+
+.PHONY: wasm64_debug
+wasm64_debug: wasm_setup
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh debug mvp
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh debug eh
+	WASM_MEMORY64=1 ${EXEC_ENVIRONMENT} ${ROOT_DIR}/scripts/wasm_build_lib.sh debug coi
+
+wasm64: wasm64_relperf
+
+.PHONY: wasm64_star
+wasm64_star: wasm64_relsize wasm64_relperf wasm64_dev wasm64_debug
 
 .PHONY: wasm_star
 wasm_star: wasm_relsize wasm_relperf wasm_dev wasm_debug

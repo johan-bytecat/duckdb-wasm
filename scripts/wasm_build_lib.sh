@@ -17,6 +17,16 @@ DUCKDB_LIB_DIR="${PROJECT_ROOT}/packages/duckdb-wasm/src/bindings"
 
 CORES=$(grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
 
+MEM64=""
+if [ "${WASM_MEMORY64:-0}" = "1" ]; then
+    MEM64="64"
+    EMCC_VERSION=$(emcc --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+    if [ "$(printf '%s\n' "3.1.59" "${EMCC_VERSION}" | sort -V | head -n1)" != "3.1.59" ]; then
+        echo "ERROR: WASM_MEMORY64=1 requires Emscripten >= 3.1.59, but found ${EMCC_VERSION}" >&2
+        exit 1
+    fi
+fi
+
 ADDITIONAL_FLAGS=
 SUFFIX=
 LINK_FLAGS=
@@ -29,16 +39,16 @@ case $MODE in
 esac
 case $FEATURES in
   "mvp")
-    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DDUCKDB_CUSTOM_PLATFORM=wasm_mvp -DDUCKDB_EXPLICIT_PLATFORM=wasm_mvp"
-    SUFFIX="-mvp"
+    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DDUCKDB_CUSTOM_PLATFORM=wasm${MEM64}_mvp -DDUCKDB_EXPLICIT_PLATFORM=wasm${MEM64}_mvp"
+    SUFFIX="-mvp${MEM64}"
     ;;
   "eh")
-    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DWITH_WASM_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh -DDUCKDB_EXPLICIT_PLATFORM=wasm_eh"
-    SUFFIX="-eh"
+    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DWITH_WASM_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm${MEM64}_eh -DDUCKDB_EXPLICIT_PLATFORM=wasm${MEM64}_eh"
+    SUFFIX="-eh${MEM64}"
     ;;
   "coi")
-    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DWITH_WASM_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -DDUCKDB_EXPLICIT_PLATFORM=wasm_threads"
-    SUFFIX="-coi"
+    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DWITH_WASM_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm${MEM64}_threads -DDUCKDB_EXPLICIT_PLATFORM=wasm${MEM64}_threads"
+    SUFFIX="-coi${MEM64}"
     LINK_FLAGS="-pthread -sSHARED_MEMORY=1"
     ;;
    *) ;;
@@ -46,7 +56,11 @@ esac
 echo "MODE=${MODE}"
 echo "FEATURES=${FEATURES}"
 
-BUILD_DIR="${PROJECT_ROOT}/build/${MODE}/${FEATURES}"
+if [ "${WASM_MEMORY64:-0}" = "1" ]; then
+    ADDITIONAL_FLAGS="${ADDITIONAL_FLAGS} -DWASM_MEMORY64=ON"
+fi
+
+BUILD_DIR="${PROJECT_ROOT}/build/${MODE}/${FEATURES}${MEM64}"
 mkdir -p ${BUILD_DIR}
 
 set -x
@@ -70,7 +84,7 @@ emmake make \
     duckdb_wasm
 
 if [ "${USE_GENERATED_EXPORTED_LIST:-no}" == "yes" ]; then
-make TARGET=${FEATURES} update_exported_list
+make TARGET=${FEATURES}${MEM64} update_exported_list
 
 emcmake cmake \
     -S${CPP_SOURCE_DIR} \
