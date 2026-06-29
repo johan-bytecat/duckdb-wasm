@@ -1,6 +1,7 @@
 import * as check from 'wasm-feature-detect';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
 import { checkWasm64Support } from './bindings/runtime';
+import { DuckDBMemoryModel } from './bindings/config';
 
 // Platform check taken from here:
 // https://github.com/xtermjs/xterm.js/blob/master/src/common/Platform.ts#L21
@@ -138,9 +139,9 @@ export async function getPlatformFeatures(): Promise<PlatformFeatures> {
     };
 }
 
-export async function selectBundle(bundles: DuckDBBundles): Promise<DuckDBBundle> {
+export async function selectBundle(bundles: DuckDBBundles, memoryModel?: DuckDBMemoryModel): Promise<DuckDBBundle> {
     const platform = await getPlatformFeatures();
-    if (platform.wasmMemory64 && bundles.wasm64) {
+    if (memoryModel === 'wasm64' && platform.wasmMemory64 && bundles.wasm64) {
         if (platform.wasmExceptions) {
             if (platform.wasmSIMD && platform.wasmThreads && platform.crossOriginIsolated && bundles.wasm64.coi) {
                 return {

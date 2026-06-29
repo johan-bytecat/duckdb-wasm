@@ -64,7 +64,7 @@ class HTTPWasmClient : public HTTPClient {
         for (auto h : headers) {
             n++;
         }
-        char **z = (char **)(void *)malloc(n * 4 * 2);
+        char **z = (char **)(void *)malloc(sizeof(char *) * n * 2);
 
         int i = 0;
         for (auto h : headers) {
@@ -87,9 +87,9 @@ class HTTPWasmClient : public HTTPClient {
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -100,15 +100,15 @@ class HTTPWasmClient : public HTTPClient {
                     var ptr2 = HEAP64[($2 >> 3) + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
 
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -147,8 +147,8 @@ class HTTPWasmClient : public HTTPClient {
                 len /= 256;
                 Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
 
-		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
-		len = headers.byteLength;
+	var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+	len = headers.byteLength;
                 var headersOnWasmHeap = _malloc(len + 8);
                 for (var iii = 0; iii < len; iii++) {
                     Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
@@ -169,7 +169,7 @@ class HTTPWasmClient : public HTTPClient {
                 len /= 256;
                 Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
 
-		len = headersOnWasmHeap;
+	len = headersOnWasmHeap;
                 LEN123 = new Uint8Array(4);
                 LEN123[0] = len % 256;
                 len -= LEN123[0];
@@ -196,9 +196,9 @@ class HTTPWasmClient : public HTTPClient {
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -209,15 +209,15 @@ class HTTPWasmClient : public HTTPClient {
                     var ptr2 = HEAP32[($2)/4 + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
 
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -256,8 +256,8 @@ class HTTPWasmClient : public HTTPClient {
                 len /= 256;
                 Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
 
-		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
-		len = headers.byteLength;
+	var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+	len = headers.byteLength;
                 var headersOnWasmHeap = _malloc(len + 8);
                 for (var iii = 0; iii < len; iii++) {
                     Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
@@ -278,7 +278,7 @@ class HTTPWasmClient : public HTTPClient {
                 len /= 256;
                 Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
 
-		len = headersOnWasmHeap;
+	len = headersOnWasmHeap;
                 LEN123 = new Uint8Array(4);
                 LEN123[0] = len % 256;
                 len -= LEN123[0];
@@ -408,7 +408,7 @@ class HTTPWasmClient : public HTTPClient {
             n++;
         }
 
-        char **z = (char **)(void *)malloc(n * 4 * 2);
+        char **z = (char **)(void *)malloc(sizeof(char *) * n * 2);
 
         int i = 0;
         for (auto h : headers) {
@@ -432,9 +432,9 @@ class HTTPWasmClient : public HTTPClient {
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -444,17 +444,16 @@ class HTTPWasmClient : public HTTPClient {
                     var ptr1 = HEAP64[($2 >> 3) + i ];
                     var ptr2 = HEAP64[($2 >> 3) + i + 1];
 
-console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -493,8 +492,8 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                 len /= 256;
                 Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
 
-		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
-		len = headers.byteLength;
+	var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+	len = headers.byteLength;
                 var headersOnWasmHeap = _malloc(len + 8);
                 for (var iii = 0; iii < len; iii++) {
                     Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
@@ -515,7 +514,7 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                 len /= 256;
                 Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
 
-		len = headersOnWasmHeap;
+	len = headersOnWasmHeap;
                 LEN123 = new Uint8Array(4);
                 LEN123[0] = len % 256;
                 len -= LEN123[0];
@@ -542,9 +541,9 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -554,17 +553,16 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                     var ptr1 = HEAP32[($2)/4 + i ];
                     var ptr2 = HEAP32[($2)/4 + i + 1];
 
-console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -603,8 +601,8 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                 len /= 256;
                 Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
 
-		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
-		len = headers.byteLength;
+	var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+	len = headers.byteLength;
                 var headersOnWasmHeap = _malloc(len + 8);
                 for (var iii = 0; iii < len; iii++) {
                     Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
@@ -625,7 +623,7 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                 len /= 256;
                 Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
 
-		len = headersOnWasmHeap;
+	len = headersOnWasmHeap;
                 LEN123 = new Uint8Array(4);
                 LEN123[0] = len % 256;
                 len -= LEN123[0];
@@ -662,9 +660,9 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
         } else {
             res = duckdb::make_uniq<HTTPResponse>(HTTPStatusCode::OK_200);
 
-		uint64_t next = 0;
+	uint64_t next = 0;
 	{
-            uint64_t LEN = 0;	
+            uint64_t LEN = 0;
             LEN *= 256;
             LEN += ((uint8_t *)exe)[3];
             LEN *= 256;
@@ -673,11 +671,11 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
             LEN += ((uint8_t *)exe)[1];
             LEN *= 256;
             LEN += ((uint8_t *)exe)[0];
-		next = LEN;
+	next = LEN;
 	}
-		uint64_t len = 0;
+	uint64_t len = 0;
 	{
-            uint64_t LEN = 0;	
+            uint64_t LEN = 0;
             LEN *= 256;
             LEN += ((uint8_t *)exe)[3 + 4];
             LEN *= 256;
@@ -686,12 +684,12 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
             LEN += ((uint8_t *)exe)[1 + 4];
             LEN *= 256;
             LEN += ((uint8_t *)exe)[0 + 4];
-		len = LEN;
+	len = LEN;
 	}
 
-		uint64_t len_headers = 0;
+	uint64_t len_headers = 0;
 	{
-            uint64_t LEN = 0;	
+            uint64_t LEN = 0;
             LEN *= 256;
             LEN += ((uint8_t *)next)[3 + 4];
             LEN *= 256;
@@ -700,9 +698,9 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
             LEN += ((uint8_t *)next)[1 + 4];
             LEN *= 256;
             LEN += ((uint8_t *)next)[0 + 4];
-		len_headers = LEN;
+	len_headers = LEN;
 	}
-		
+
 	char * ptr = reinterpret_cast<char*>(next) ;
 
 
@@ -719,9 +717,9 @@ string head = string(h.c_str(), i);
 while (i < h.size() && h[i] != ' ') i++;
 string tail = string(h.c_str() + i+1);
 
-res->headers.Insert(head, tail);	
+res->headers.Insert(head, tail);
 	}
-	
+
 
 
 
@@ -764,7 +762,7 @@ res->headers.Insert(head, tail);
             n++;
         }
 
-        char **z = (char **)(void *)malloc(n * 4 * 2);
+        char **z = (char **)(void *)malloc(sizeof(char *) * n * 2);
 
         int i = 0;
         for (auto h : headers) {
@@ -792,9 +790,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -805,15 +803,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP64[($2 >> 3) + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -823,12 +821,12 @@ res->headers.Insert(head, tail);
 //xhr.setRequestHeader("Content-Type", "application/octet-stream");
 //xhr.setRequestHeader("Content-Type", "text/json");
                 try {
-			var post_payload = new Uint8Array($5);
+		var post_payload = new Uint8Array($5);
 
-			for (var iii = 0; iii < $5; iii++) {
-				post_payload[iii] = Module.HEAPU8[iii + $4];
-			}
-			xhr.send(post_payload);
+		for (var iii = 0; iii < $5; iii++) {
+			post_payload[iii] = Module.HEAPU8[iii + $4];
+		}
+		xhr.send(post_payload);
                 } catch {
                     return 0;
                 }
@@ -868,9 +866,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -881,15 +879,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP32[($2)/4 + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -899,12 +897,12 @@ res->headers.Insert(head, tail);
 //xhr.setRequestHeader("Content-Type", "application/octet-stream");
 //xhr.setRequestHeader("Content-Type", "text/json");
                 try {
-			var post_payload = new Uint8Array($5);
+		var post_payload = new Uint8Array($5);
 
-			for (var iii = 0; iii < $5; iii++) {
-				post_payload[iii] = Module.HEAPU8[iii + $4];
-			}
-			xhr.send(post_payload);
+		for (var iii = 0; iii < $5; iii++) {
+			post_payload[iii] = Module.HEAPU8[iii + $4];
+		}
+		xhr.send(post_payload);
                 } catch {
                     return 0;
                 }
@@ -998,7 +996,7 @@ res->headers.Insert(head, tail);
             n++;
         }
 
-        char **z = (char **)(void *)malloc(n * 4 * 2);
+        char **z = (char **)(void *)malloc(sizeof(char *) * n * 2);
 
         int i = 0;
         for (auto h : headers) {
@@ -1026,9 +1024,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -1039,15 +1037,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP64[($2 >> 3) + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -1057,17 +1055,17 @@ res->headers.Insert(head, tail);
 //xhr.setRequestHeader("Content-Type", "application/octet-stream");
 //xhr.setRequestHeader("Content-Type", "text/json");
                 try {
-			var post_payload = new Uint8Array($5);
+		var post_payload = new Uint8Array($5);
 
-			for (var iii = 0; iii < $5; iii++) {
-				post_payload[iii] = Module.HEAPU8[iii + $4];
-			}
-			xhr.send(post_payload);
+		for (var iii = 0; iii < $5; iii++) {
+			post_payload[iii] = Module.HEAPU8[iii + $4];
+		}
+		xhr.send(post_payload);
                 } catch {
                     return 0;
                 }
                 if (xhr.status >= 400) return 0;
-		var uInt8Array = Uint8Array.from(Array.from(xhr.getResponseHeader("Etag")).map(letter => letter.charCodeAt(0)));
+	var uInt8Array = Uint8Array.from(Array.from(xhr.getResponseHeader("Etag")).map(letter => letter.charCodeAt(0)));
 
                 var len = uInt8Array.byteLength;
                 var fileOnWasmHeap = _malloc(len + 4);
@@ -1102,9 +1100,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -1115,15 +1113,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP32[($2)/4 + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -1133,17 +1131,17 @@ res->headers.Insert(head, tail);
 //xhr.setRequestHeader("Content-Type", "application/octet-stream");
 //xhr.setRequestHeader("Content-Type", "text/json");
                 try {
-			var post_payload = new Uint8Array($5);
+		var post_payload = new Uint8Array($5);
 
-			for (var iii = 0; iii < $5; iii++) {
-				post_payload[iii] = Module.HEAPU8[iii + $4];
-			}
-			xhr.send(post_payload);
+		for (var iii = 0; iii < $5; iii++) {
+			post_payload[iii] = Module.HEAPU8[iii + $4];
+		}
+		xhr.send(post_payload);
                 } catch {
                     return 0;
                 }
                 if (xhr.status >= 400) return 0;
-		var uInt8Array = Uint8Array.from(Array.from(xhr.getResponseHeader("Etag")).map(letter => letter.charCodeAt(0)));
+	var uInt8Array = Uint8Array.from(Array.from(xhr.getResponseHeader("Etag")).map(letter => letter.charCodeAt(0)));
 
                 var len = uInt8Array.byteLength;
                 var fileOnWasmHeap = _malloc(len + 4);
@@ -1232,7 +1230,7 @@ res->headers.Insert(head, tail);
             n++;
         }
 
-        char **z = (char **)(void *)malloc(n * 4 * 2);
+        char **z = (char **)(void *)malloc(sizeof(char *) * n * 2);
 
         int i = 0;
         for (auto h : headers) {
@@ -1256,9 +1254,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -1269,15 +1267,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP64[($2 >> 3) + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
@@ -1325,9 +1323,9 @@ res->headers.Insert(head, tail);
                     return 0;
                 }
                 const xhr = new XMLHttpRequest();
-		if (false && url.startsWith("http://")) {
-			url = "https://" + url.substr(7);
-		}
+	if (false && url.startsWith("http://")) {
+		url = "https://" + url.substr(7);
+	}
                 xhr.open(UTF8ToString($3), url, false);
                 xhr.responseType = "arraybuffer";
 
@@ -1338,15 +1336,15 @@ res->headers.Insert(head, tail);
                     var ptr2 = HEAP32[($2)/4 + i + 1];
 
                     try {
-			var z = encodeURI(UTF8ToString(ptr1));
-			if (z === "Host") z = "X-Host-Override";
-			if (z === "User-Agent") {}
-			else if (z === "Authorization") {
-                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
-			} else {
-				
-                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
-			}
+		var z = encodeURI(UTF8ToString(ptr1));
+		if (z === "Host") z = "X-Host-Override";
+		if (z === "User-Agent") {}
+		else if (z === "Authorization") {
+		xhr.setRequestHeader(z, UTF8ToString(ptr2));
+		} else {
+
+		xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+		}
                     } catch (error) {
                 console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
                     }
