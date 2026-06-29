@@ -13,6 +13,8 @@ import {
     FileFlags,
     readString,
     PreparedDBFileHandle,
+    packSRet,
+    isWasm64,
 } from './runtime';
 import { DuckDBModule } from './duckdb_module';
 import * as udf from './udf_runtime';
@@ -236,9 +238,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                         const src = new Uint8Array();
                         mod.HEAPU8.set(src, data);
                         const result = mod._malloc(3 * 8);
-                        mod.HEAPF64[(result >> 3) + 0] = 1;
-                        mod.HEAPF64[(result >> 3) + 1] = data;
-                        mod.HEAPF64[(result >> 3) + 2] = new Date().getTime() / 1000;
+                        packSRet(mod, result, 1, data, new Date().getTime() / 1000);
                         return result;
                     } else if ((flags & FileFlags.FILE_FLAGS_READ) == 0) {
                         throw new Error(`Opening file ${file.fileName} failed: unsupported file flags: ${flags}`);
@@ -266,11 +266,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                             try { contentLength = xhr.getResponseHeader('Content-Length'); } catch (e: any) {console.warn(`Failed to get Content-Length on request`);}
                             if (contentLength !== null && xhr.status == 206) {
                                 const result = mod._malloc(3 * 8);
-                                mod.HEAPF64[(result >> 3) + 0] = +contentLength;
-                                mod.HEAPF64[(result >> 3) + 1] = 0;
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                mod.HEAPF64[(result >> 3) + 2] = +modification_time;
+                                packSRet(mod, result, +contentLength, 0, +modification_time);
                                 return result;
                             }
                         } catch (e: any) {
@@ -332,11 +330,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 presumedLength !== null
                             ) {
                                 const result = mod._malloc(3 * 8);
-                                mod.HEAPF64[(result >> 3) + 0] = +presumedLength;
-                                mod.HEAPF64[(result >> 3) + 1] = 0;
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                mod.HEAPF64[(result >> 3) + 2] = +modification_time;
+                                packSRet(mod, result, +presumedLength, 0, +modification_time);
                                 return result;
                             }
                             if (
@@ -350,11 +346,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 const src = new Uint8Array(xhr.response, 0, xhr.response.byteLength);
                                 mod.HEAPU8.set(src, data);
                                 const result = mod._malloc(3 * 8);
-                                mod.HEAPF64[(result >> 3) + 0] = xhr.response.byteLength;
-                                mod.HEAPF64[(result >> 3) + 1] = data;
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                mod.HEAPF64[(result >> 3) + 2] = +modification_time;
+                                packSRet(mod, result, xhr.response.byteLength, data, +modification_time);
                                 return result;
                             }
                             console.warn(`falling back to full HTTP read for: ${file.dataUrl}`);
@@ -376,11 +370,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                             const src = new Uint8Array(xhr.response, 0, xhr.response.byteLength);
                             mod.HEAPU8.set(src, data);
                             const result = mod._malloc(3 * 8);
-                            mod.HEAPF64[(result >> 3) + 0] = xhr.response.byteLength;
-                            mod.HEAPF64[(result >> 3) + 1] = data;
                             let modification_time = 0;
                             try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                            mod.HEAPF64[(result >> 3) + 2] = +modification_time;
+                            packSRet(mod, result, xhr.response.byteLength, data, +modification_time);
                             return result;
                         }
                     }
@@ -396,9 +388,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     const handle = BROWSER_RUNTIME._files?.get(file.fileName);
                     if (handle) {
                         const result = mod._malloc(3 * 8);
-                        mod.HEAPF64[(result >> 3) + 0] = handle.size;
-                        mod.HEAPF64[(result >> 3) + 1] = 0;
-                        mod.HEAPF64[(result >> 3) + 2] = 0;
+                        packSRet(mod, result, handle.size, 0, 0);
                         return result;
                     }
 
@@ -411,9 +401,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     console.warn(`Buffering missing file: ${file.fileName}`);
                     const result = mod._malloc(3 * 8);
                     const buffer = mod._malloc(1); // malloc(0) is allowed to return a nullptr
-                    mod.HEAPF64[(result >> 3) + 0] = 1;
-                    mod.HEAPF64[(result >> 3) + 1] = buffer;
-                    mod.HEAPF64[(result >> 3) + 2] = 0;
+                    packSRet(mod, result, 1, buffer, 0);
                     return result;
                 }
                 case DuckDBDataProtocol.BROWSER_FSACCESS: {
@@ -426,9 +414,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     }
                     const result = mod._malloc(3 * 8);
                     const fileSize = handle.getSize();
-                    mod.HEAPF64[(result >> 3) + 0] = fileSize;
-                    mod.HEAPF64[(result >> 3) + 1] = 0;
-                    mod.HEAPF64[(result >> 3) + 2] = 0;
+                    packSRet(mod, result, fileSize, 0, 0);
                     return result;
                 }
             }
@@ -439,7 +425,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    glob: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    glob: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
             const path = readString(mod, pathPtr, pathLen);
             // Starts with http?
@@ -499,7 +485,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    checkFile: (mod: DuckDBModule, pathPtr: number, pathLen: number): boolean => {
+    checkFile: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): boolean => {
         try {
             const path = readString(mod, pathPtr, pathLen);
             // Starts with http or S3?
@@ -552,7 +538,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             failWith(mod, e.toString());
         }
     },
-    dropFile: (mod: DuckDBModule, fileNamePtr: number, fileNameLen: number) => {
+    dropFile: (mod: DuckDBModule, fileNamePtr: number | bigint, fileNameLen: number) => {
         const fileName = readString(mod, fileNamePtr, fileNameLen);
         const handle: FileSystemSyncAccessHandle = BROWSER_RUNTIME._files?.get(fileName);
         if (handle) {
@@ -594,7 +580,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    readFile(mod: DuckDBModule, fileId: number, buf: number, bytes: number, location: number) {
+    readFile(mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) {
         if (bytes == 0) {
             // Be robust to empty reads
             return 0;
@@ -625,7 +611,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                             (xhr.status == 200 && bytes == xhr.response.byteLength && location == 0)
                         ) {
                             const src = new Uint8Array(xhr.response, 0, Math.min(xhr.response.byteLength, bytes));
-                            mod.HEAPU8.set(src, buf);
+                            mod.HEAPU8.set(src, Number(buf));
                             return src.byteLength;
                         } else if (xhr.status == 200) {
                             // TODO: here we are actually throwing away all non-relevant bytes, but this is still better than failing
@@ -638,7 +624,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 location,
                                 Math.min(xhr.response.byteLength - location, bytes),
                             );
-                            mod.HEAPU8.set(src, buf);
+                            mod.HEAPU8.set(src, Number(buf));
                             return src.byteLength;
                         } else {
                             throw new Error(
@@ -657,7 +643,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     }
                     const sliced = handle!.slice(location, location + bytes);
                     const data = new Uint8Array(new FileReaderSync().readAsArrayBuffer(sliced));
-                    mod.HEAPU8.set(data, buf);
+                    mod.HEAPU8.set(data, Number(buf));
                     return data.byteLength;
                 }
                 case DuckDBDataProtocol.BROWSER_FSACCESS: {
@@ -665,7 +651,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     if (!handle) {
                         throw new Error(`No OPFS access handle registered with name: ${file.fileName}`);
                     }
-                    const out = mod.HEAPU8.subarray(buf, buf + bytes);
+                    const out = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
                     return handle.read(out, { at: location });
                 }
             }
@@ -676,14 +662,14 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    writeFile: (mod: DuckDBModule, fileId: number, buf: number, bytes: number, location: number) => {
+    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
         const file = BROWSER_RUNTIME.getFileInfo(mod, fileId);
         switch (file?.dataProtocol) {
             case DuckDBDataProtocol.HTTP:
                 failWith(mod, 'Cannot write to HTTP file');
                 return 0;
             case DuckDBDataProtocol.S3: {
-                const buffer = mod.HEAPU8.subarray(buf, buf + bytes);
+                const buffer = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', getHTTPUrl(file?.s3Config, file.dataUrl!), false);
                 addS3Headers(xhr, file?.s3Config, file.dataUrl!, 'PUT', '', buffer);
@@ -702,7 +688,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                 if (!handle) {
                     throw new Error(`No OPFS access handle registered with name: ${file.fileName}`);
                 }
-                const input = mod.HEAPU8.subarray(buf, buf + bytes);
+                const input = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
                 return handle.write(input, { at: location });
             }
         }
@@ -735,25 +721,25 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             });
         }
     },
-    checkDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    checkDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         const path = readString(mod, pathPtr, pathLen);
         console.log(`checkDirectory: ${path}`);
         return false;
     },
-    createDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    createDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         const path = readString(mod, pathPtr, pathLen);
         console.log(`createDirectory: ${path}`);
     },
-    removeDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    removeDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         const path = readString(mod, pathPtr, pathLen);
         console.log(`removeDirectory: ${path}`);
     },
-    listDirectoryEntries: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    listDirectoryEntries: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         const path = readString(mod, pathPtr, pathLen);
         console.log(`listDirectoryEntries: ${path}`);
         return false;
     },
-    moveFile: (mod: DuckDBModule, fromPtr: number, fromLen: number, toPtr: number, toLen: number) => {
+    moveFile: (mod: DuckDBModule, fromPtr: number | bigint, fromLen: number, toPtr: number | bigint, toLen: number) => {
         const from = readString(mod, fromPtr, fromLen);
         const to = readString(mod, toPtr, toLen);
         const handle = BROWSER_RUNTIME._files?.get(from);
@@ -769,14 +755,14 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
         return true;
     },
-    removeFile: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number) => {},
+    removeFile: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number) => {},
     callScalarUDF: (
         mod: DuckDBModule,
-        response: number,
+        response: number | bigint,
         funcId: number,
-        descPtr: number,
+        descPtr: number | bigint,
         descSize: number,
-        ptrsPtr: number,
+        ptrsPtr: number | bigint,
         ptrsSize: number,
     ): void => {
         udf.callScalarUDF(BROWSER_RUNTIME, mod, response, funcId, descPtr, descSize, ptrsPtr, ptrsSize);

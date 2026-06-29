@@ -17,21 +17,21 @@ export interface AsyncDuckDBBindings {
     copyFileToPath(name: string, out: string): Promise<void>;
     copyFileToBuffer(name: string): Promise<Uint8Array>;
 
-    disconnect(conn: number): Promise<void>;
-    runQuery(conn: number, text: string): Promise<Uint8Array>;
-    startPendingQuery(conn: number, text: string, allowStreamResult: boolean): Promise<Uint8Array | null>;
-    pollPendingQuery(conn: number): Promise<Uint8Array | null>;
-    cancelPendingQuery(conn: number): Promise<boolean>;
-    fetchQueryResults(conn: number): Promise<Uint8Array | null>;
+    disconnect(conn: number | bigint): Promise<void>;
+    runQuery(conn: number | bigint, text: string): Promise<Uint8Array>;
+    startPendingQuery(conn: number | bigint, text: string, allowStreamResult: boolean): Promise<Uint8Array | null>;
+    pollPendingQuery(conn: number | bigint): Promise<Uint8Array | null>;
+    cancelPendingQuery(conn: number | bigint): Promise<boolean>;
+    fetchQueryResults(conn: number | bigint): Promise<Uint8Array | null>;
 
-    createPrepared(conn: number, text: string): Promise<number>;
-    closePrepared(conn: number, statement: number): Promise<void>;
-    runPrepared(conn: number, statement: number, params: any[]): Promise<Uint8Array>;
-    sendPrepared(conn: number, statement: number, params: any[]): Promise<Uint8Array>;
+    createPrepared(conn: number | bigint, text: string): Promise<number | bigint>;
+    closePrepared(conn: number | bigint, statement: number | bigint): Promise<void>;
+    runPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Promise<Uint8Array>;
+    sendPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Promise<Uint8Array>;
 
-    insertArrowFromIPCStream(conn: number, buffer: Uint8Array, options?: CSVInsertOptions): Promise<void>;
-    insertCSVFromPath(conn: number, path: string, options: CSVInsertOptions): Promise<void>;
-    insertJSONFromPath(conn: number, path: string, options: JSONInsertOptions): Promise<void>;
+    insertArrowFromIPCStream(conn: number | bigint, buffer: Uint8Array, options?: CSVInsertOptions): Promise<void>;
+    insertCSVFromPath(conn: number | bigint, path: string, options: CSVInsertOptions): Promise<void>;
+    insertJSONFromPath(conn: number | bigint, path: string, options: JSONInsertOptions): Promise<void>;
 
     dropFile(name: string):Promise<null>;
     dropFiles(names?: string[]):Promise<null>;

@@ -14,24 +14,24 @@ export interface DuckDBBindings {
     tokenize(text: string): ScriptTokens;
 
     connect(): DuckDBConnection;
-    disconnect(conn: number): void;
-    runQuery(conn: number, text: string): Uint8Array;
-    startPendingQuery(conn: number, text: string, allowStreamResult: boolean): Uint8Array | null;
-    pollPendingQuery(conn: number): Uint8Array | null;
-    cancelPendingQuery(conn: number): boolean;
-    fetchQueryResults(conn: number): Uint8Array | null;
-    getTableNames(conn: number, text: string): string[];
+    disconnect(conn: number | bigint): void;
+    runQuery(conn: number | bigint, text: string): Uint8Array;
+    startPendingQuery(conn: number | bigint, text: string, allowStreamResult: boolean): Uint8Array | null;
+    pollPendingQuery(conn: number | bigint): Uint8Array | null;
+    cancelPendingQuery(conn: number | bigint): boolean;
+    fetchQueryResults(conn: number | bigint): Uint8Array | null;
+    getTableNames(conn: number | bigint, text: string): string[];
 
-    createPrepared(conn: number, text: string): number;
-    closePrepared(conn: number, statement: number): void;
-    runPrepared(conn: number, statement: number, params: any[]): Uint8Array;
-    sendPrepared(conn: number, statement: number, params: any[]): Uint8Array;
+    createPrepared(conn: number | bigint, text: string): number | bigint;
+    closePrepared(conn: number | bigint, statement: number | bigint): void;
+    runPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Uint8Array;
+    sendPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Uint8Array;
 
-    createScalarFunction(conn: number, name: string, returns: arrow.DataType, func: (...args: any[]) => void): void;
+    createScalarFunction(conn: number | bigint, name: string, returns: arrow.DataType, func: (...args: any[]) => void): void;
 
-    insertArrowFromIPCStream(conn: number, buffer: Uint8Array, options?: ArrowInsertOptions): void;
-    insertCSVFromPath(conn: number, path: string, options: CSVInsertOptions): void;
-    insertJSONFromPath(conn: number, path: string, options: JSONInsertOptions): void;
+    insertArrowFromIPCStream(conn: number | bigint, buffer: Uint8Array, options?: ArrowInsertOptions): void;
+    insertCSVFromPath(conn: number | bigint, path: string, options: CSVInsertOptions): void;
+    insertJSONFromPath(conn: number | bigint, path: string, options: JSONInsertOptions): void;
 
     registerFileURL(name: string, url: string, proto: DuckDBDataProtocol, directIO: boolean): void;
     registerFileText(name: string, text: string): void;

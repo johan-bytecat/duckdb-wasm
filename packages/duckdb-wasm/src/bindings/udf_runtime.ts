@@ -1,17 +1,25 @@
-import { DuckDBRuntime } from './runtime';
+import { DuckDBRuntime, isWasm64 } from './runtime';
 import { DuckDBModule } from './duckdb_module';
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder('utf-8');
 
-function storeError(mod: DuckDBModule, response: number, message: string) {
+function storeError(mod: DuckDBModule, response: number | bigint, message: string) {
     const msgBuffer = TEXT_ENCODER.encode(message);
     const heapAddr = mod._malloc(msgBuffer.byteLength);
-    const heapArray = mod.HEAPU8.subarray(heapAddr, heapAddr + msgBuffer.byteLength);
+    const heapArray = mod.HEAPU8.subarray(Number(heapAddr), Number(heapAddr) + msgBuffer.byteLength);
     heapArray.set(msgBuffer);
-    mod.HEAPF64[(response >> 3) + 0] = 1;
-    mod.HEAPF64[(response >> 3) + 1] = heapAddr;
-    mod.HEAPF64[(response >> 3) + 2] = heapArray.byteLength;
+    if (isWasm64) {
+        const view = new DataView(mod.HEAPU8.buffer);
+        const offset = Number(response);
+        view.setBigInt64(offset, BigInt(1), true);
+        view.setBigInt64(offset + 8, BigInt(heapAddr), true);
+        view.setBigInt64(offset + 16, BigInt(msgBuffer.byteLength), true);
+    } else {
+        mod.HEAPF64[((response as number) >> 3) + 0] = 1;
+        mod.HEAPF64[((response as number) >> 3) + 1] = heapAddr as number;
+        mod.HEAPF64[((response as number) >> 3) + 2] = heapArray.byteLength;
+    }
 }
 
 function getTypeSize(ptype: string) {
@@ -32,8 +40,9 @@ function getTypeSize(ptype: string) {
     }
 }
 
-function ptrToArray(mod: DuckDBModule, ptr: number, ptype: string, n: number) {
-    const heap = mod.HEAPU8.subarray(ptr, ptr + n * getTypeSize(ptype));
+function ptrToArray(mod: DuckDBModule, ptr: number | bigint, ptype: string, n: number) {
+    const p = Number(ptr);
+    const heap = mod.HEAPU8.subarray(p, p + n * getTypeSize(ptype));
     switch (ptype) {
         case 'UINT8':
             return new Uint8Array(heap.buffer, heap.byteOffset, n);
@@ -52,12 +61,14 @@ function ptrToArray(mod: DuckDBModule, ptr: number, ptype: string, n: number) {
     }
 }
 
-function ptrToUint8Array(mod: DuckDBModule, ptr: number, n: number) {
-    const heap = mod.HEAPU8.subarray(ptr, ptr + n);
+function ptrToUint8Array(mod: DuckDBModule, ptr: number | bigint, n: number) {
+    const p = Number(ptr);
+    const heap = mod.HEAPU8.subarray(p, p + n);
     return new Uint8Array(heap.buffer, heap.byteOffset, n);
 }
-function ptrToFloat64Array(mod: DuckDBModule, ptr: number, n: number) {
-    const heap = mod.HEAPU8.subarray(ptr, ptr + n * 8);
+function ptrToFloat64Array(mod: DuckDBModule, ptr: number | bigint, n: number) {
+    const p = Number(ptr);
+    const heap = mod.HEAPU8.subarray(p, p + n * 8);
     return new Float64Array(heap.buffer, heap.byteOffset, n);
 }
 
@@ -88,11 +99,11 @@ type ArgumentResolver = (row: number) => any | null;
 export function callScalarUDF(
     runtime: DuckDBRuntime,
     mod: DuckDBModule,
-    response: number,
+    response: number | bigint,
     funcId: number,
-    descPtr: number,
+    descPtr: number | bigint,
     descSize: number,
-    ptrsPtr: number,
+    ptrsPtr: number | bigint,
     ptrsSize: number,
 ) {
     try {
@@ -101,7 +112,7 @@ export function callScalarUDF(
             storeError(mod, response, 'Unknown UDF with id: ' + funcId);
             return;
         }
-        const rawDesc = TEXT_DECODER.decode(mod.HEAPU8.subarray(descPtr, descPtr + descSize));
+        const rawDesc = TEXT_DECODER.decode(mod.HEAPU8.subarray(Number(descPtr), Number(descPtr) + descSize));
         const desc = JSON.parse(rawDesc) as SchemaDescription;
         const ptrs = ptrToFloat64Array(mod, ptrsPtr, ptrsSize / 8);
 
@@ -253,15 +264,31 @@ export function callScalarUDF(
         // Need to store three pointers, data, validity and length
         const retLen = 3 * 8;
         const retPtr = mod._malloc(retLen);
-        const retBuffer = ptrToFloat64Array(mod, retPtr, 3);
-        retBuffer[0] = resultDataPtr;
-        retBuffer[1] = resultValidityPtr;
-        retBuffer[2] = resultLengthsPtr;
+        if (isWasm64) {
+            const view = new DataView(mod.HEAPU8.buffer);
+            const retOff = Number(retPtr);
+            view.setBigInt64(retOff, BigInt(resultDataPtr), true);
+            view.setBigInt64(retOff + 8, BigInt(resultValidityPtr), true);
+            view.setBigInt64(retOff + 16, BigInt(resultLengthsPtr), true);
+        } else {
+            const retBuffer = ptrToFloat64Array(mod, retPtr, 3);
+            retBuffer[0] = resultDataPtr as number;
+            retBuffer[1] = resultValidityPtr as number;
+            retBuffer[2] = resultLengthsPtr as number;
+        }
 
         // Pack response
-        mod.HEAPF64[(response >> 3) + 0] = 0;
-        mod.HEAPF64[(response >> 3) + 1] = retPtr;
-        mod.HEAPF64[(response >> 3) + 2] = 0;
+        if (isWasm64) {
+            const view = new DataView(mod.HEAPU8.buffer);
+            const offset = Number(response);
+            view.setBigInt64(offset, BigInt(0), true);
+            view.setBigInt64(offset + 8, BigInt(retPtr), true);
+            view.setBigInt64(offset + 16, BigInt(0), true);
+        } else {
+            mod.HEAPF64[((response as number) >> 3) + 0] = 0;
+            mod.HEAPF64[((response as number) >> 3) + 1] = retPtr as number;
+            mod.HEAPF64[((response as number) >> 3) + 2] = 0;
+        }
     } catch (e: any) {
         storeError(mod, response, e.toString());
     }

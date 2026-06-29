@@ -9,7 +9,7 @@ export interface UDFFunctionDeclaration {
 
 export interface UDFFunction {
     functionId: number;
-    connectionId: number;
+    connectionId: number | bigint;
     name: string;
     returnType: arrow.DataType;
     func: (...args: any[]) => any;

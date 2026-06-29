@@ -9,6 +9,8 @@ import {
     decodeText,
     DuckDBDataProtocol,
     FileFlags,
+    packSRet,
+    isWasm64,
 } from './runtime';
 import { StatusCode } from '../status';
 import { DuckDBModule } from './duckdb_module';
@@ -90,8 +92,14 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                     }
                     const fileSize = fs.fstatSync(fd).size;
                     const result = mod._malloc(2 * 8);
-                    mod.HEAPF64[(result >> 3) + 0] = +fileSize;
-                    mod.HEAPF64[(result >> 3) + 1] = 0;
+                    if (isWasm64) {
+                        const view = new DataView(mod.HEAPU8.buffer);
+                        view.setBigInt64(Number(result), BigInt(+fileSize), true);
+                        view.setBigInt64(Number(result) + 8, BigInt(0), true);
+                    } else {
+                        mod.HEAPF64[(result >> 3) + 0] = +fileSize;
+                        mod.HEAPF64[(result >> 3) + 1] = 0;
+                    }
                     return result;
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:
@@ -132,7 +140,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    dropFile: (mod: DuckDBModule, _fileNamePtr: number, _fileNameLen: number) => {},
+    dropFile: (mod: DuckDBModule, _fileNamePtr: number | bigint, _fileNameLen: number) => {},
     truncateFile: (mod: DuckDBModule, fileId: number, newSize: number) => {
         try {
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
@@ -153,7 +161,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    readFile: (mod: DuckDBModule, fileId: number, buf: number, bytes: number, location: number) => {
+    readFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
         try {
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
@@ -163,7 +171,12 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                         failWith(mod, `File ${fileId} is missing a file descriptor`);
                         return 0;
                     }
-                    return fs.readSync(fileHandle, mod.HEAPU8, buf, bytes, location);
+                    const bufNum = Number(buf);
+                    if (typeof buf === 'bigint' && !Number.isSafeInteger(bufNum)) {
+                        failWith(mod, `File ${fileId} readFile buffer pointer too large`);
+                        return 0;
+                    }
+                    return fs.readSync(fileHandle, mod.HEAPU8, bufNum, bytes, location);
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:
                 case DuckDBDataProtocol.BROWSER_FSACCESS:
@@ -177,7 +190,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    writeFile: (mod: DuckDBModule, fileId: number, buf: number, bytes: number, location: number) => {
+    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
         try {
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
@@ -187,7 +200,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                         failWith(mod, `File ${fileId} is missing a file descriptor`);
                         return 0;
                     }
-                    const src = mod.HEAPU8.subarray(buf, buf + bytes);
+                    const src = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
                     return fs.writeSync(fileHandle, src, 0, src.length, location);
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:
@@ -230,9 +243,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         return 0;
     },
 
-    checkDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    checkDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(pathPtr, pathPtr + pathLen));
+            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
             return fs.existsSync(path);
         } catch (e: any) {
             console.log(e);
@@ -240,9 +253,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
             return false;
         }
     },
-    createDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    createDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(pathPtr, pathPtr + pathLen));
+            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
             return fs.mkdirSync(path);
         } catch (e: any) {
             console.log(e);
@@ -250,9 +263,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    removeDirectory: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    removeDirectory: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(pathPtr, pathPtr + pathLen));
+            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
             return fs.rmdirSync(path);
         } catch (e: any) {
             console.log(e);
@@ -260,11 +273,11 @@ export const NODE_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    listDirectoryEntries: (mod: DuckDBModule, _pathPtr: number, _pathLen: number) => {
+    listDirectoryEntries: (mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number) => {
         failWith(mod, 'Not Implemented');
         return false;
     },
-    glob: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    glob: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
             const path = readString(mod, pathPtr, pathLen);
             const entries = fg.sync([path], { dot: true });
@@ -277,7 +290,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    moveFile: (mod: DuckDBModule, fromPtr: number, fromLen: number, toPtr: number, toLen: number) => {
+    moveFile: (mod: DuckDBModule, fromPtr: number | bigint, fromLen: number, toPtr: number | bigint, toLen: number) => {
         const from = readString(mod, fromPtr, fromLen);
         const to = readString(mod, toPtr, toLen);
         const handle = NODE_RUNTIME._files?.get(from);
@@ -293,9 +306,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return true;
     },
-    checkFile: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    checkFile: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(pathPtr, pathPtr + pathLen));
+            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
             return fs.existsSync(path);
         } catch (e: any) {
             console.log(e);
@@ -303,9 +316,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
             return false;
         }
     },
-    removeFile: (mod: DuckDBModule, pathPtr: number, pathLen: number) => {
+    removeFile: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(pathPtr, pathPtr + pathLen));
+            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
             return fs.rmSync(path);
         } catch (e: any) {
             console.log(e);
@@ -315,11 +328,11 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     callScalarUDF: (
         mod: DuckDBModule,
-        response: number,
+        response: number | bigint,
         funcId: number,
-        descPtr: number,
+        descPtr: number | bigint,
         descSize: number,
-        ptrsPtr: number,
+        ptrsPtr: number | bigint,
         ptrsSize: number,
     ): void => {
         udf.callScalarUDF(NODE_RUNTIME, mod, response, funcId, descPtr, descSize, ptrsPtr, ptrsSize);

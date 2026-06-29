@@ -8,9 +8,9 @@ export class AsyncDuckDBConnection {
     /** The async duckdb */
     protected readonly _bindings: AsyncDuckDB;
     /** The conn handle */
-    protected readonly _conn: number;
+    protected readonly _conn: number | bigint;
 
-    constructor(bindings: AsyncDuckDB, conn: number) {
+    constructor(bindings: AsyncDuckDB, conn: number | bigint) {
         this._bindings = bindings;
         this._conn = conn;
     }
@@ -26,7 +26,7 @@ export class AsyncDuckDBConnection {
     }
 
     /** Brave souls may use this function to consume the underlying connection id */
-    public useUnsafe<R>(callback: (bindings: AsyncDuckDB, conn: number) => R) {
+    public useUnsafe<R>(callback: (bindings: AsyncDuckDB, conn: number | bigint) => R) {
         return callback(this._bindings, this._conn);
     }
 
@@ -124,7 +124,7 @@ export class AsyncResultStreamIterator implements AsyncIterable<Uint8Array> {
 
     constructor(
         protected readonly db: AsyncDuckDB,
-        protected readonly conn: number,
+        protected readonly conn: number | bigint,
         protected readonly header: Uint8Array,
     ) {
         this._first = true;
@@ -171,12 +171,12 @@ export class AsyncPreparedStatement<T extends { [key: string]: arrow.DataType } 
     /** The bindings */
     protected readonly bindings: AsyncDuckDB;
     /** The connection id */
-    protected readonly connectionId: number;
+    protected readonly connectionId: number | bigint;
     /** The statement id */
-    protected readonly statementId: number;
+    protected readonly statementId: number | bigint;
 
     /** Constructor */
-    constructor(bindings: AsyncDuckDB, connectionId: number, statementId: number) {
+    constructor(bindings: AsyncDuckDB, connectionId: number | bigint, statementId: number | bigint) {
         this.bindings = bindings;
         this.connectionId = connectionId;
         this.statementId = statementId;

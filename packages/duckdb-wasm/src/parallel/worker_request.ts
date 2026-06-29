@@ -7,8 +7,8 @@ import { WebFile } from '../bindings/web_file';
 import { InstantiationProgress } from '../bindings/progress';
 import { DuckDBDataProtocol } from '../bindings';
 
-export type ConnectionID = number;
-export type StatementID = number;
+export type ConnectionID = number | bigint;
+export type StatementID = number | bigint;
 
 export enum WorkerRequestType {
     CANCEL_PENDING_QUERY = 'CANCEL_PENDING_QUERY',
@@ -108,45 +108,45 @@ export class WorkerTask<T, D, P> {
 
 export type WorkerRequestVariant =
     | WorkerRequest<WorkerRequestType.CLOSE_PREPARED, [ConnectionID, StatementID]>
-    | WorkerRequest<WorkerRequestType.CANCEL_PENDING_QUERY, number>
+    | WorkerRequest<WorkerRequestType.CANCEL_PENDING_QUERY, ConnectionID>
     | WorkerRequest<WorkerRequestType.COLLECT_FILE_STATISTICS, [string, boolean]>
     | WorkerRequest<WorkerRequestType.REGISTER_OPFS_FILE_NAME, [string]>
     | WorkerRequest<WorkerRequestType.CONNECT, null>
     | WorkerRequest<WorkerRequestType.COPY_FILE_TO_BUFFER, string>
     | WorkerRequest<WorkerRequestType.COPY_FILE_TO_PATH, [string, string]>
     | WorkerRequest<WorkerRequestType.CREATE_PREPARED, [ConnectionID, string]>
-    | WorkerRequest<WorkerRequestType.DISCONNECT, number>
+    | WorkerRequest<WorkerRequestType.DISCONNECT, ConnectionID>
     | WorkerRequest<WorkerRequestType.DROP_FILE, string>
     | WorkerRequest<WorkerRequestType.DROP_FILES, string[] | undefined>
     | WorkerRequest<WorkerRequestType.EXPORT_FILE_STATISTICS, string>
-    | WorkerRequest<WorkerRequestType.FETCH_QUERY_RESULTS, number>
+    | WorkerRequest<WorkerRequestType.FETCH_QUERY_RESULTS, ConnectionID>
     | WorkerRequest<WorkerRequestType.FLUSH_FILES, null>
     | WorkerRequest<WorkerRequestType.GET_FEATURE_FLAGS, null>
-    | WorkerRequest<WorkerRequestType.GET_TABLE_NAMES, [number, string]>
+    | WorkerRequest<WorkerRequestType.GET_TABLE_NAMES, [ConnectionID, string]>
     | WorkerRequest<WorkerRequestType.GET_VERSION, null>
     | WorkerRequest<WorkerRequestType.GLOB_FILE_INFOS, string>
     | WorkerRequest<
           WorkerRequestType.INSERT_ARROW_FROM_IPC_STREAM,
-          [number, Uint8Array, ArrowInsertOptions | undefined]
+          [ConnectionID, Uint8Array, ArrowInsertOptions | undefined]
       >
-    | WorkerRequest<WorkerRequestType.INSERT_CSV_FROM_PATH, [number, string, CSVInsertOptions]>
-    | WorkerRequest<WorkerRequestType.INSERT_JSON_FROM_PATH, [number, string, JSONInsertOptions]>
+    | WorkerRequest<WorkerRequestType.INSERT_CSV_FROM_PATH, [ConnectionID, string, CSVInsertOptions]>
+    | WorkerRequest<WorkerRequestType.INSERT_JSON_FROM_PATH, [ConnectionID, string, JSONInsertOptions]>
     | WorkerRequest<WorkerRequestType.INSTANTIATE, [string, string | null]>
     | WorkerRequest<WorkerRequestType.OPEN, DuckDBConfig>
     | WorkerRequest<WorkerRequestType.PING, null>
-    | WorkerRequest<WorkerRequestType.POLL_PENDING_QUERY, number>
+    | WorkerRequest<WorkerRequestType.POLL_PENDING_QUERY, ConnectionID>
     | WorkerRequest<WorkerRequestType.REGISTER_FILE_BUFFER, [string, Uint8Array]>
     | WorkerRequest<WorkerRequestType.REGISTER_FILE_HANDLE, [string, any, DuckDBDataProtocol, boolean]>
     | WorkerRequest<WorkerRequestType.REGISTER_FILE_URL, [string, string, DuckDBDataProtocol, boolean]>
     | WorkerRequest<WorkerRequestType.RESET, null>
-    | WorkerRequest<WorkerRequestType.RUN_PREPARED, [number, number, any[]]>
-    | WorkerRequest<WorkerRequestType.RUN_QUERY, [number, string]>
-    | WorkerRequest<WorkerRequestType.SEND_PREPARED, [number, number, any[]]>
-    | WorkerRequest<WorkerRequestType.START_PENDING_QUERY, [number, string, boolean]>
+    | WorkerRequest<WorkerRequestType.RUN_PREPARED, [ConnectionID, StatementID, any[]]>
+    | WorkerRequest<WorkerRequestType.RUN_QUERY, [ConnectionID, string]>
+    | WorkerRequest<WorkerRequestType.SEND_PREPARED, [ConnectionID, StatementID, any[]]>
+    | WorkerRequest<WorkerRequestType.START_PENDING_QUERY, [ConnectionID, string, boolean]>
     | WorkerRequest<WorkerRequestType.TOKENIZE, string>;
 
 export type WorkerResponseVariant =
-    | WorkerResponse<WorkerResponseType.CONNECTION_INFO, number>
+    | WorkerResponse<WorkerResponseType.CONNECTION_INFO, ConnectionID>
     | WorkerResponse<WorkerResponseType.ERROR, any>
     | WorkerResponse<WorkerResponseType.FEATURE_FLAGS, number>
     | WorkerResponse<WorkerResponseType.FILE_BUFFER, Uint8Array>
@@ -157,7 +157,7 @@ export type WorkerResponseVariant =
     | WorkerResponse<WorkerResponseType.LOG, LogEntryVariant>
     | WorkerResponse<WorkerResponseType.PROGRESS_UPDATE, ProgressEntry>
     | WorkerResponse<WorkerResponseType.OK, null>
-    | WorkerResponse<WorkerResponseType.PREPARED_STATEMENT_ID, number>
+    | WorkerResponse<WorkerResponseType.PREPARED_STATEMENT_ID, StatementID>
     | WorkerResponse<WorkerResponseType.QUERY_PLAN, Uint8Array>
     | WorkerResponse<WorkerResponseType.QUERY_RESULT, Uint8Array>
     | WorkerResponse<WorkerResponseType.QUERY_RESULT_CHUNK, Uint8Array | null>
@@ -171,11 +171,11 @@ export type WorkerResponseVariant =
 export type WorkerTaskVariant =
     | WorkerTask<WorkerRequestType.COLLECT_FILE_STATISTICS, [string, boolean], null>
     | WorkerTask<WorkerRequestType.REGISTER_OPFS_FILE_NAME, [string], null>
-    | WorkerTask<WorkerRequestType.CLOSE_PREPARED, [number, number], null>
+    | WorkerTask<WorkerRequestType.CLOSE_PREPARED, [ConnectionID, StatementID], null>
     | WorkerTask<WorkerRequestType.CONNECT, null, ConnectionID>
     | WorkerTask<WorkerRequestType.COPY_FILE_TO_BUFFER, string, Uint8Array>
     | WorkerTask<WorkerRequestType.COPY_FILE_TO_PATH, [string, string], null>
-    | WorkerTask<WorkerRequestType.CREATE_PREPARED, [number, string], number>
+    | WorkerTask<WorkerRequestType.CREATE_PREPARED, [ConnectionID, string], StatementID>
     | WorkerTask<WorkerRequestType.DISCONNECT, ConnectionID, null>
     | WorkerTask<WorkerRequestType.DROP_FILE, string, null>
     | WorkerTask<WorkerRequestType.DROP_FILES, string[] | undefined, null>
@@ -183,15 +183,15 @@ export type WorkerTaskVariant =
     | WorkerTask<WorkerRequestType.FETCH_QUERY_RESULTS, ConnectionID, Uint8Array | null>
     | WorkerTask<WorkerRequestType.FLUSH_FILES, null, null>
     | WorkerTask<WorkerRequestType.GET_FEATURE_FLAGS, null, number>
-    | WorkerTask<WorkerRequestType.GET_TABLE_NAMES, [number, string], string[]>
+    | WorkerTask<WorkerRequestType.GET_TABLE_NAMES, [ConnectionID, string], string[]>
     | WorkerTask<WorkerRequestType.GET_VERSION, null, string>
     | WorkerTask<
           WorkerRequestType.INSERT_ARROW_FROM_IPC_STREAM,
-          [number, Uint8Array, ArrowInsertOptions | undefined],
+          [ConnectionID, Uint8Array, ArrowInsertOptions | undefined],
           null
       >
-    | WorkerTask<WorkerRequestType.INSERT_CSV_FROM_PATH, [number, string, CSVInsertOptions], null>
-    | WorkerTask<WorkerRequestType.INSERT_JSON_FROM_PATH, [number, string, JSONInsertOptions], null>
+    | WorkerTask<WorkerRequestType.INSERT_CSV_FROM_PATH, [ConnectionID, string, CSVInsertOptions], null>
+    | WorkerTask<WorkerRequestType.INSERT_JSON_FROM_PATH, [ConnectionID, string, JSONInsertOptions], null>
     | WorkerTask<WorkerRequestType.INSTANTIATE, [string, string | null], null>
     | WorkerTask<WorkerRequestType.OPEN, DuckDBConfig, null>
     | WorkerTask<WorkerRequestType.PING, null, null>
@@ -200,9 +200,9 @@ export type WorkerTaskVariant =
     | WorkerTask<WorkerRequestType.REGISTER_FILE_URL, [string, string, DuckDBDataProtocol, boolean], null>
     | WorkerTask<WorkerRequestType.GLOB_FILE_INFOS, string, WebFile[]>
     | WorkerTask<WorkerRequestType.RESET, null, null>
-    | WorkerTask<WorkerRequestType.RUN_PREPARED, [number, number, any[]], Uint8Array>
+    | WorkerTask<WorkerRequestType.RUN_PREPARED, [ConnectionID, StatementID, any[]], Uint8Array>
     | WorkerTask<WorkerRequestType.RUN_QUERY, [ConnectionID, string], Uint8Array>
-    | WorkerTask<WorkerRequestType.SEND_PREPARED, [number, number, any[]], Uint8Array>
+    | WorkerTask<WorkerRequestType.SEND_PREPARED, [ConnectionID, StatementID, any[]], Uint8Array>
     | WorkerTask<WorkerRequestType.START_PENDING_QUERY, [ConnectionID, string, boolean], Uint8Array | null>
     | WorkerTask<WorkerRequestType.POLL_PENDING_QUERY, ConnectionID, Uint8Array | null>
     | WorkerTask<WorkerRequestType.CANCEL_PENDING_QUERY, ConnectionID, boolean>

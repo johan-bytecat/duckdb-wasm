@@ -5,7 +5,7 @@ import { InstantiationProgress } from './progress';
 import { DuckDBBindings } from './bindings_interface';
 import { DuckDBConnection } from './connection';
 import { StatusCode, IsArrowBuffer, IsDuckDBWasmRetry } from '../status';
-import { dropResponseBuffers, DuckDBRuntime, readString, callSRet, copyBuffer, DuckDBDataProtocol } from './runtime';
+import { dropResponseBuffers, DuckDBRuntime, readString, callSRet, copyBuffer, copyBuffer64, readString64, DuckDBDataProtocol, setMemoryModel, isWasm64 } from './runtime';
 import { CSVInsertOptions, JSONInsertOptions, ArrowInsertOptions } from './insert_options';
 import { ScriptTokens } from './tokens';
 import { FileStatistics } from './file_stats';
@@ -94,6 +94,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         // Wait for onRuntimeInitialized
         await this._initPromise;
         this._initPromise = null;
+        setMemoryModel(this._instance);
         // Remove own progress callback
         this.onInstantiationProgress = this.onInstantiationProgress.filter(x => x != onProgress);
         (globalThis as any).DUCKDB_BINDINGS = this;
@@ -159,8 +160,8 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         return new DuckDBConnection(this, conn);
     }
     /** Disconnect from database */
-    public disconnect(conn: number): void {
-        this.mod.ccall('duckdb_web_disconnect', null, ['number'], [conn]);
+    public disconnect(conn: number | bigint): void {
+        this.mod.ccall('duckdb_web_disconnect', null, ['number'], [conn as number]);
         if (this.pthread) {
             for (const worker of [...this.pthread.runningWorkers, ...this.pthread.unusedWorkers]) {
                 worker.postMessage({
@@ -172,7 +173,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Send a query and return the full result */
-    public runQuery(conn: number, text: string): Uint8Array {
+    public runQuery(conn: number | bigint, text: string): Uint8Array {
         const BUF = TEXT_ENCODER.encode(text);
         const bufferPtr = this.mod._malloc(BUF.length);
         const bufferOfs = this.mod.HEAPU8.subarray(bufferPtr, bufferPtr + BUF.length);
@@ -197,7 +198,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
      *  On null, the query has to be executed using `pollPendingQuery` until that returns != null.
      *  Results can then be fetched using `fetchQueryResults`
      */
-    public startPendingQuery(conn: number, text: string, allowStreamResult: boolean = false): Uint8Array | null {
+    public startPendingQuery(conn: number | bigint, text: string, allowStreamResult: boolean = false): Uint8Array | null {
         const BUF = TEXT_ENCODER.encode(text);
         const bufferPtr = this.mod._malloc(BUF.length);
         const bufferOfs = this.mod.HEAPU8.subarray(bufferPtr, bufferPtr + BUF.length);
@@ -220,7 +221,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         return res;
     }
     /** Poll a pending query */
-    public pollPendingQuery(conn: number): Uint8Array | null {
+    public pollPendingQuery(conn: number | bigint): Uint8Array | null {
         const [s, d, n] = callSRet(this.mod, 'duckdb_web_pending_query_poll', ['number'], [conn]);
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
@@ -233,11 +234,11 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         return res;
     }
     /** Cancel a pending query */
-    public cancelPendingQuery(conn: number): boolean {
-        return this.mod.ccall('duckdb_web_pending_query_cancel', 'boolean', ['number'], [conn]);
+    public cancelPendingQuery(conn: number | bigint): boolean {
+        return this.mod.ccall('duckdb_web_pending_query_cancel', 'boolean', ['number'], [conn as number]);
     }
     /** Fetch query results */
-    public fetchQueryResults(conn: number): Uint8Array | null {
+    public fetchQueryResults(conn: number | bigint): Uint8Array | null {
         const [s, d, n] = callSRet(this.mod, 'duckdb_web_query_fetch_results', ['number'], [conn]);
         if (IsDuckDBWasmRetry(s)) {
             dropResponseBuffers(this.mod);
@@ -261,7 +262,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         return res;
     }
     /** Get table names */
-    public getTableNames(conn: number, text: string): string[] {
+    public getTableNames(conn: number | bigint, text: string): string[] {
         const BUF = TEXT_ENCODER.encode(text);
         const bufferPtr = this.mod._malloc(BUF.length);
         const bufferOfs = this.mod.HEAPU8.subarray(bufferPtr, bufferPtr + BUF.length);
@@ -283,7 +284,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
 
     /** Create a scalar function */
     public createScalarFunction(
-        conn: number,
+        conn: number | bigint,
         name: string,
         returns: arrow.DataType,
         func: (...args: any[]) => void,
@@ -326,7 +327,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Prepare a statement and return its identifier */
-    public createPrepared(conn: number, text: string): number {
+    public createPrepared(conn: number | bigint, text: string): number | bigint {
         const BUF = TEXT_ENCODER.encode(text);
         const bufferPtr = this.mod._malloc(BUF.length);
         const bufferOfs = this.mod.HEAPU8.subarray(bufferPtr, bufferPtr + BUF.length);
@@ -346,7 +347,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Close a prepared statement */
-    public closePrepared(conn: number, statement: number): void {
+    public closePrepared(conn: number | bigint, statement: number | bigint): void {
         const [s, d, n] = callSRet(this.mod, 'duckdb_web_prepared_close', ['number', 'number'], [conn, statement]);
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
@@ -355,7 +356,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Execute a prepared statement and return the full result */
-    public runPrepared(conn: number, statement: number, params: any[]): Uint8Array {
+    public runPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Uint8Array {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_prepared_run',
@@ -371,7 +372,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Execute a prepared statement and stream the result */
-    public sendPrepared(conn: number, statement: number, params: any[]): Uint8Array {
+    public sendPrepared(conn: number | bigint, statement: number | bigint, params: any[]): Uint8Array {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_prepared_send',
@@ -387,7 +388,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Insert record batches from an arrow ipc stream */
-    public insertArrowFromIPCStream(conn: number, buffer: Uint8Array, options?: ArrowInsertOptions): void {
+    public insertArrowFromIPCStream(conn: number | bigint, buffer: Uint8Array, options?: ArrowInsertOptions): void {
         if (buffer.length == 0) return;
         // Store buffer
         const bufferPtr = this.mod._malloc(buffer.length);
@@ -411,7 +412,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
 
     /** Insert csv from path */
-    public insertCSVFromPath(conn: number, path: string, options: CSVInsertOptions): void {
+    public insertCSVFromPath(conn: number | bigint, path: string, options: CSVInsertOptions): void {
         // Stringify options
         if (options.columns !== undefined) {
             options.columnsFlat = [];
@@ -436,7 +437,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         }
     }
     /** Insert json from path */
-    public insertJSONFromPath(conn: number, path: string, options: JSONInsertOptions): void {
+    public insertJSONFromPath(conn: number | bigint, path: string, options: JSONInsertOptions): void {
         // Stringify options
         if (options.columns !== undefined) {
             options.columnsFlat = [];
@@ -626,8 +627,8 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
     /** Drop files */
     public dropFiles(names?:string[]): void {
-        const pointers:number[] = [];
-        let pointerOfArray:number = -1;
+        const pointers: (number | bigint)[] = [];
+        let pointerOfArray: number | bigint = -1;
         try {
             for (const str of (names ?? [])) {
                 if (str !== null && str !== undefined && str.length > 0) {
@@ -640,12 +641,24 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
                     pointers.push(ret);
                 }
             }
-            pointerOfArray = this.mod._malloc(pointers.length * 4);
-            if (!pointerOfArray) {
-                throw new Error(`Failed to allocate memory for pointers array`);
-            }
-            for (let i = 0; i < pointers.length; i++) {
-                this.mod.HEAP32[(pointerOfArray >> 2) + i] = pointers[i];
+            if (isWasm64) {
+                pointerOfArray = (this.mod._malloc as any)(pointers.length * 8);
+                if (!pointerOfArray) {
+                    throw new Error(`Failed to allocate memory for pointers array`);
+                }
+                const view = new DataView(this.mod.HEAPU8.buffer);
+                const baseOffset = Number(pointerOfArray);
+                for (let i = 0; i < pointers.length; i++) {
+                    view.setBigInt64(baseOffset + i * 8, BigInt(pointers[i]), true);
+                }
+            } else {
+                pointerOfArray = this.mod._malloc(pointers.length * 4);
+                if (!pointerOfArray) {
+                    throw new Error(`Failed to allocate memory for pointers array`);
+                }
+                for (let i = 0; i < pointers.length; i++) {
+                    this.mod.HEAP32[(pointerOfArray >> 2) + i] = pointers[i] as number;
+                }
             }
             const [s, d, n] = callSRet(
                 this.mod,
@@ -665,10 +678,10 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
             dropResponseBuffers(this.mod);
         } finally {
             for (const pointer of pointers) {
-                this.mod._free(pointer);
+                this.mod._free(pointer as any);
             }
             if( pointerOfArray > 0 ){
-                this.mod._free(pointerOfArray);
+                this.mod._free(pointerOfArray as any);
             }
         }
     }
@@ -690,11 +703,9 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
         }
-        const buffer = this.mod.HEAPU8.subarray(d, d + n);
-        const copy = new Uint8Array(buffer.length);
-        copy.set(buffer);
+        const result = copyBuffer(this.mod, d, n);
         dropResponseBuffers(this.mod);
-        return copy;
+        return result;
     }
     /** Enable tracking of file statistics */
     public async registerOPFSFileName(file: string): Promise<void> {
@@ -716,6 +727,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
         }
-        return new FileStatistics(this.mod.HEAPU8.subarray(d, d + n));
+        const buffer = copyBuffer(this.mod, d, n);
+        return new FileStatistics(buffer);
     }
 }

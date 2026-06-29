@@ -47,7 +47,7 @@ export function testHTTPFS(sdb: () => duckdb.DuckDBBindings): void {
 
     const getModule = function () {
         let module: DuckDBModule | null = null;
-        conn!.useUnsafe((bindings: DuckDBBindings, con_number: number) => {
+        conn!.useUnsafe((bindings: DuckDBBindings, con_number: number | bigint) => {
             module = (bindings as DuckDBBindingsBase).mod;
         });
         expect(module).toBeDefined();

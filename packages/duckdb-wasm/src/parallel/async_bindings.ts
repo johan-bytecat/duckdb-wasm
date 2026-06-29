@@ -5,6 +5,7 @@ import {
     WorkerTaskVariant,
     WorkerTask,
     ConnectionID,
+    StatementID,
     WorkerTaskReturnType,
 } from './worker_request';
 import { AsyncDuckDBBindings } from './async_bindings_interface';
@@ -396,7 +397,7 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
     }
 
     /** Connect to the database */
-    public async connectInternal(): Promise<number> {
+    public async connectInternal(): Promise<ConnectionID> {
         const task = new WorkerTask<WorkerRequestType.CONNECT, null, ConnectionID>(WorkerRequestType.CONNECT, null);
         return await this.postTask(task);
     }
@@ -500,8 +501,8 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
     }
 
     /** Get table names */
-    public async getTableNames(conn: number, text: string): Promise<string[]> {
-        const task = new WorkerTask<WorkerRequestType.GET_TABLE_NAMES, [number, string], string[]>(
+    public async getTableNames(conn: ConnectionID, text: string): Promise<string[]> {
+        const task = new WorkerTask<WorkerRequestType.GET_TABLE_NAMES, [ConnectionID, string], string[]>(
             WorkerRequestType.GET_TABLE_NAMES,
             [conn, text],
         );
@@ -509,32 +510,32 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
     }
 
     /** Prepare a statement and return its identifier */
-    public async createPrepared(conn: number, text: string): Promise<number> {
-        const task = new WorkerTask<WorkerRequestType.CREATE_PREPARED, [number, string], number>(
+    public async createPrepared(conn: ConnectionID, text: string): Promise<number | bigint> {
+        const task = new WorkerTask<WorkerRequestType.CREATE_PREPARED, [ConnectionID, string], StatementID>(
             WorkerRequestType.CREATE_PREPARED,
             [conn, text],
         );
         return await this.postTask(task);
     }
     /** Close a prepared statement */
-    public async closePrepared(conn: number, statement: number): Promise<void> {
-        const task = new WorkerTask<WorkerRequestType.CLOSE_PREPARED, [number, number], null>(
+    public async closePrepared(conn: ConnectionID, statement: number | bigint): Promise<void> {
+        const task = new WorkerTask<WorkerRequestType.CLOSE_PREPARED, [ConnectionID, StatementID], null>(
             WorkerRequestType.CLOSE_PREPARED,
             [conn, statement],
         );
         await this.postTask(task);
     }
     /** Execute a prepared statement and return the full result */
-    public async runPrepared(conn: number, statement: number, params: any[]): Promise<Uint8Array> {
-        const task = new WorkerTask<WorkerRequestType.RUN_PREPARED, [ConnectionID, number, any[]], Uint8Array>(
+    public async runPrepared(conn: ConnectionID, statement: number | bigint, params: any[]): Promise<Uint8Array> {
+        const task = new WorkerTask<WorkerRequestType.RUN_PREPARED, [ConnectionID, StatementID, any[]], Uint8Array>(
             WorkerRequestType.RUN_PREPARED,
             [conn, statement, params],
         );
         return await this.postTask(task);
     }
     /** Execute a prepared statement and stream the result */
-    public async sendPrepared(conn: number, statement: number, params: any[]): Promise<Uint8Array> {
-        const task = new WorkerTask<WorkerRequestType.SEND_PREPARED, [ConnectionID, number, any[]], Uint8Array>(
+    public async sendPrepared(conn: ConnectionID, statement: number | bigint, params: any[]): Promise<Uint8Array> {
+        const task = new WorkerTask<WorkerRequestType.SEND_PREPARED, [ConnectionID, StatementID, any[]], Uint8Array>(
             WorkerRequestType.SEND_PREPARED,
             [conn, statement, params],
         );
@@ -661,7 +662,7 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
         // Pass to the worker
         const task = new WorkerTask<
             WorkerRequestType.INSERT_ARROW_FROM_IPC_STREAM,
-            [number, Uint8Array, ArrowInsertOptions | undefined],
+            [ConnectionID, Uint8Array, ArrowInsertOptions | undefined],
             null
         >(WorkerRequestType.INSERT_ARROW_FROM_IPC_STREAM, [conn, buffer, options]);
         await this.postTask(task, [buffer.buffer]);
@@ -680,7 +681,7 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
         }
 
         // Pass to the worker
-        const task = new WorkerTask<WorkerRequestType.INSERT_CSV_FROM_PATH, [number, string, CSVInsertOptions], null>(
+        const task = new WorkerTask<WorkerRequestType.INSERT_CSV_FROM_PATH, [ConnectionID, string, CSVInsertOptions], null>(
             WorkerRequestType.INSERT_CSV_FROM_PATH,
             [conn, path, options],
         );
@@ -700,7 +701,7 @@ export class AsyncDuckDB implements AsyncDuckDBBindings {
         }
 
         // Pass to the worker
-        const task = new WorkerTask<WorkerRequestType.INSERT_JSON_FROM_PATH, [number, string, JSONInsertOptions], null>(
+        const task = new WorkerTask<WorkerRequestType.INSERT_JSON_FROM_PATH, [ConnectionID, string, JSONInsertOptions], null>(
             WorkerRequestType.INSERT_JSON_FROM_PATH,
             [conn, path, options],
         );

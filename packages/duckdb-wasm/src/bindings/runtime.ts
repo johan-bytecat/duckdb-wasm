@@ -2,7 +2,7 @@ import { DuckDBModule } from './duckdb_module';
 import { UDFFunction } from './udf_function';
 import * as udf_rt from './udf_runtime';
 
-let isWasm64 = false;
+export let isWasm64 = false;
 
 export function setMemoryModel(mod: DuckDBModule): void {
     const ptr = mod._malloc(1) as any;
@@ -30,16 +30,22 @@ export function failWith(mod: DuckDBModule, msg: string): void {
 }
 
 /** Copy a buffer */
-export function copyBuffer(mod: DuckDBModule, begin: number, length: number): Uint8Array {
-    const buffer = mod.HEAPU8.subarray(begin, begin + length);
+export function copyBuffer(mod: DuckDBModule, begin: number | bigint, length: number | bigint): Uint8Array {
+    if (typeof begin === 'bigint') {
+        return copyBuffer64(mod, begin, length as bigint);
+    }
+    const buffer = mod.HEAPU8.subarray(begin, begin + (length as number));
     const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
     copy.set(buffer);
     return copy;
 }
 
 /** Decode a string */
-export function readString(mod: DuckDBModule, begin: number, length: number): string {
-    return decodeText(mod.HEAPU8.subarray(begin, begin + length));
+export function readString(mod: DuckDBModule, begin: number | bigint, length: number | bigint): string {
+    if (typeof begin === 'bigint') {
+        return readString64(mod, begin, length as bigint);
+    }
+    return decodeText(mod.HEAPU8.subarray(begin, begin + (length as number)));
 }
 
 /** Copy a buffer from WASM64 heap */
@@ -173,6 +179,29 @@ function callSRet64(
     return [status, data, dataSize];
 }
 
+function packSRet32(mod: DuckDBModule, response: number, a: number, b: number, c: number): void {
+    mod.HEAPF64[(response >> 3) + 0] = a;
+    mod.HEAPF64[(response >> 3) + 1] = b;
+    mod.HEAPF64[(response >> 3) + 2] = c;
+}
+
+function packSRet64(mod: DuckDBModule, response: number | bigint, a: number | bigint, b: number | bigint, c: number | bigint): void {
+    const view = new DataView(mod.HEAPU8.buffer);
+    const offset = Number(response);
+    view.setBigInt64(offset, BigInt(a), true);
+    view.setBigInt64(offset + 8, BigInt(b), true);
+    view.setBigInt64(offset + 16, BigInt(c), true);
+}
+
+/** Write values into a packed response buffer */
+export function packSRet(mod: DuckDBModule, response: number | bigint, a: number | bigint, b: number | bigint, c: number | bigint): void {
+    if (isWasm64) {
+        packSRet64(mod, response, a, b, c);
+    } else {
+        packSRet32(mod, response as number, a as number, b as number, c as number);
+    }
+}
+
 /** Call a function with packed response buffer */
 export function callSRet(
     mod: DuckDBModule,
@@ -204,21 +233,21 @@ export interface DuckDBRuntime {
     openFile(mod: DuckDBModule, fileId: number, flags: FileFlags): void;
     syncFile(mod: DuckDBModule, fileId: number): void;
     closeFile(mod: DuckDBModule, fileId: number): void;
-    dropFile(mod: DuckDBModule, fileNamePtr: number, fileNameLen: number): void;
+    dropFile(mod: DuckDBModule, fileNamePtr: number | bigint, fileNameLen: number): void;
     getLastFileModificationTime(mod: DuckDBModule, fileId: number): number;
     truncateFile(mod: DuckDBModule, fileId: number, newSize: number): void;
-    readFile(mod: DuckDBModule, fileId: number, buffer: number, bytes: number, location: number): number;
-    writeFile(mod: DuckDBModule, fileId: number, buffer: number, bytes: number, location: number): number;
+    readFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number): number;
+    writeFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number): number;
 
     // File APIs with path parameter
-    removeDirectory(mod: DuckDBModule, pathPtr: number, pathLen: number): void;
-    checkDirectory(mod: DuckDBModule, pathPtr: number, pathLen: number): boolean;
-    createDirectory(mod: DuckDBModule, pathPtr: number, pathLen: number): void;
-    listDirectoryEntries(mod: DuckDBModule, pathPtr: number, pathLen: number): boolean;
-    glob(mod: DuckDBModule, pathPtr: number, pathLen: number): void;
-    moveFile(mod: DuckDBModule, fromPtr: number, fromLen: number, toPtr: number, toLen: number): void;
-    checkFile(mod: DuckDBModule, pathPtr: number, pathLen: number): boolean;
-    removeFile(mod: DuckDBModule, pathPtr: number, pathLen: number): void;
+    removeDirectory(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): void;
+    checkDirectory(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): boolean;
+    createDirectory(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): void;
+    listDirectoryEntries(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): boolean;
+    glob(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): void;
+    moveFile(mod: DuckDBModule, fromPtr: number | bigint, fromLen: number, toPtr: number | bigint, toLen: number): void;
+    checkFile(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): boolean;
+    removeFile(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): void;
 
     // Prepare a file handle that could only be acquired aschronously
     prepareFileHandle?: (path: string, protocol: DuckDBDataProtocol) => Promise<PreparedDBFileHandle[]>;
@@ -231,11 +260,11 @@ export interface DuckDBRuntime {
     // Call a scalar UDF function
     callScalarUDF(
         mod: DuckDBModule,
-        response: number,
+        response: number | bigint,
         funcId: number,
-        descPtr: number,
+        descPtr: number | bigint,
         descSize: number,
-        ptrsPtr: number,
+        ptrsPtr: number | bigint,
         ptrsSize: number,
     ): void;
 }
@@ -248,7 +277,7 @@ export const DEFAULT_RUNTIME: DuckDBRuntime = {
     openFile: (_mod: DuckDBModule, _fileId: number, flags: FileFlags): void => {},
     syncFile: (_mod: DuckDBModule, _fileId: number): void => {},
     closeFile: (_mod: DuckDBModule, _fileId: number): void => {},
-    dropFile: (_mod: DuckDBModule, _fileNamePtr: number, _fileNameLen: number): void => {},
+    dropFile: (_mod: DuckDBModule, _fileNamePtr: number | bigint, _fileNameLen: number): void => {},
     getLastFileModificationTime: (_mod: DuckDBModule, _fileId: number): number => {
         return 0;
     },
@@ -256,34 +285,34 @@ export const DEFAULT_RUNTIME: DuckDBRuntime = {
         return;
     },
     truncateFile: (_mod: DuckDBModule, _fileId: number, _newSize: number): void => {},
-    readFile: (_mod: DuckDBModule, _fileId: number, _buffer: number, _bytes: number, _location: number): number => {
+    readFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number): number => {
         return 0;
     },
-    writeFile: (_mod: DuckDBModule, _fileId: number, _buffer: number, _bytes: number, _location: number): number => {
+    writeFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number): number => {
         return 0;
     },
 
-    removeDirectory: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): void => {},
-    checkDirectory: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): boolean => {
+    removeDirectory: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): void => {},
+    checkDirectory: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): boolean => {
         return false;
     },
-    createDirectory: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): void => {},
-    listDirectoryEntries: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): boolean => {
+    createDirectory: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): void => {},
+    listDirectoryEntries: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): boolean => {
         return false;
     },
-    glob: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): void => {},
-    moveFile: (_mod: DuckDBModule, _fromPtr: number, _fromLen: number, _toPtr: number, _toLen: number): void => {},
-    checkFile: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): boolean => {
+    glob: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): void => {},
+    moveFile: (_mod: DuckDBModule, _fromPtr: number | bigint, _fromLen: number, _toPtr: number | bigint, _toLen: number): void => {},
+    checkFile: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): boolean => {
         return false;
     },
-    removeFile: (_mod: DuckDBModule, _pathPtr: number, _pathLen: number): void => {},
+    removeFile: (_mod: DuckDBModule, _pathPtr: number | bigint, _pathLen: number): void => {},
     callScalarUDF: (
         mod: DuckDBModule,
-        response: number,
+        response: number | bigint,
         funcId: number,
-        descPtr: number,
+        descPtr: number | bigint,
         descSize: number,
-        ptrsPtr: number,
+        ptrsPtr: number | bigint,
         ptrsSize: number,
     ): void => {
         udf_rt.callScalarUDF(DEFAULT_RUNTIME, mod, response, funcId, descPtr, descSize, ptrsPtr, ptrsSize);

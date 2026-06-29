@@ -7,10 +7,10 @@ export class DuckDBConnection {
     /** The bindings */
     protected _bindings: DuckDBBindings;
     /** The connection handle */
-    protected _conn: number;
+    protected _conn: number | bigint;
 
     /** Constructor */
-    constructor(bindings: DuckDBBindings, conn: number) {
+    constructor(bindings: DuckDBBindings, conn: number | bigint) {
         this._bindings = bindings;
         this._conn = conn;
     }
@@ -21,7 +21,7 @@ export class DuckDBConnection {
     }
 
     /** Brave souls may use this function to consume the underlying connection id */
-    public useUnsafe<R>(callback: (bindings: DuckDBBindings, conn: number) => R) {
+    public useUnsafe<R>(callback: (bindings: DuckDBBindings, conn: number | bigint) => R) {
         return callback(this._bindings, this._conn);
     }
 
@@ -113,7 +113,7 @@ export class ResultStreamIterator implements Iterable<Uint8Array> {
 
     constructor(
         protected bindings: DuckDBBindings,
-        protected conn: number,
+        protected conn: number | bigint,
         protected header: Uint8Array,
     ) {
         this._first = true;
@@ -149,12 +149,12 @@ export class PreparedStatement<T extends { [key: string]: arrow.DataType } = any
     /** The bindings */
     protected readonly bindings: DuckDBBindings;
     /** The connection id */
-    protected readonly connectionId: number;
+    protected readonly connectionId: number | bigint;
     /** The statement id */
-    protected readonly statementId: number;
+    protected readonly statementId: number | bigint;
 
     /** Constructor */
-    constructor(bindings: DuckDBBindings, connectionId: number, statementId: number) {
+    constructor(bindings: DuckDBBindings, connectionId: number | bigint, statementId: number | bigint) {
         this.bindings = bindings;
         this.connectionId = connectionId;
         this.statementId = statementId;
