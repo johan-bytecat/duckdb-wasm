@@ -112,6 +112,8 @@ import { longQueries } from './long_queries.test';
 //import { testEXCEL } from './excel.test';
 //import { testJSON } from './json.test';
 import { testPivot } from './pivot.test';
+import { testWasm64Parquet, testWasm64ParquetAsync } from './wasm64_parquet.test';
+import { testWasm64Integration, testWasm64IntegrationAsync } from './wasm64_integration.test';
 
 const baseURL = window.location.origin;
 const dataURL = `${baseURL}/data`;
@@ -142,3 +144,7 @@ testTokenizationAsync(() => adb!);
 //testEXCEL(() => db!);
 //testJSON(() => db!);
 testPivot(() => db!);
+testWasm64Parquet(() => db!);
+testWasm64ParquetAsync(() => adb!);
+testWasm64Integration(() => db!);
+testWasm64IntegrationAsync(() => adb!);
