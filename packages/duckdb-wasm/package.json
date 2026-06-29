@@ -101,6 +101,9 @@
         "./dist/duckdb-mvp.wasm": "./dist/duckdb-mvp.wasm",
         "./dist/duckdb-eh.wasm": "./dist/duckdb-eh.wasm",
         "./dist/duckdb-coi.wasm": "./dist/duckdb-coi.wasm",
+        "./dist/duckdb-mvp64.wasm": "./dist/duckdb-mvp64.wasm",
+        "./dist/duckdb-eh64.wasm": "./dist/duckdb-eh64.wasm",
+        "./dist/duckdb-coi64.wasm": "./dist/duckdb-coi64.wasm",
         "./dist/duckdb-browser": "./dist/duckdb-browser.mjs",
         "./dist/duckdb-browser.cjs": "./dist/duckdb-browser.cjs",
         "./dist/duckdb-browser.mjs": "./dist/duckdb-browser.mjs",
@@ -108,12 +111,76 @@
         "./dist/duckdb-browser-coi.worker.js": "./dist/duckdb-browser-coi.worker.js",
         "./dist/duckdb-browser-eh.worker.js": "./dist/duckdb-browser-eh.worker.js",
         "./dist/duckdb-browser-mvp.worker.js": "./dist/duckdb-browser-mvp.worker.js",
+        "./dist/duckdb-browser-mvp64": "./dist/duckdb-browser-mvp64.mjs",
+        "./dist/duckdb-browser-mvp64.cjs": "./dist/duckdb-browser-mvp64.cjs",
+        "./dist/duckdb-browser-mvp64.mjs": "./dist/duckdb-browser-mvp64.mjs",
+        "./dist/duckdb-browser-eh64": "./dist/duckdb-browser-eh64.mjs",
+        "./dist/duckdb-browser-eh64.cjs": "./dist/duckdb-browser-eh64.cjs",
+        "./dist/duckdb-browser-eh64.mjs": "./dist/duckdb-browser-eh64.mjs",
+        "./dist/duckdb-browser-coi64": "./dist/duckdb-browser-coi64.mjs",
+        "./dist/duckdb-browser-coi64.cjs": "./dist/duckdb-browser-coi64.cjs",
+        "./dist/duckdb-browser-coi64.mjs": "./dist/duckdb-browser-coi64.mjs",
+        "./dist/duckdb-browser-coi64.pthread.worker.js": "./dist/duckdb-browser-coi64.pthread.worker.js",
+        "./dist/duckdb-browser-coi64.worker.js": "./dist/duckdb-browser-coi64.worker.js",
+        "./dist/duckdb-browser-eh64.worker.js": "./dist/duckdb-browser-eh64.worker.js",
+        "./dist/duckdb-browser-mvp64.worker.js": "./dist/duckdb-browser-mvp64.worker.js",
         "./dist/duckdb-node": "./dist/duckdb-node.cjs",
         "./dist/duckdb-node.cjs": "./dist/duckdb-node.cjs",
+        "./dist/duckdb-node-mvp64": "./dist/duckdb-node-mvp64.cjs",
+        "./dist/duckdb-node-mvp64.cjs": "./dist/duckdb-node-mvp64.cjs",
+        "./dist/duckdb-node-eh64": "./dist/duckdb-node-eh64.cjs",
+        "./dist/duckdb-node-eh64.cjs": "./dist/duckdb-node-eh64.cjs",
         "./dist/duckdb-node-blocking": "./dist/duckdb-node-blocking.cjs",
         "./dist/duckdb-node-blocking.cjs": "./dist/duckdb-node-blocking.cjs",
         "./dist/duckdb-node-eh.worker.cjs": "./dist/duckdb-node-eh.worker.cjs",
         "./dist/duckdb-node-mvp.worker.cjs": "./dist/duckdb-node-mvp.worker.cjs",
+        "./dist/duckdb-node-mvp64.worker.cjs": "./dist/duckdb-node-mvp64.worker.cjs",
+        "./dist/duckdb-node-eh64.worker.cjs": "./dist/duckdb-node-eh64.worker.cjs",
+        "./wasm64-mvp": {
+            "browser": {
+                "types": "./dist/duckdb-browser.d.ts",
+                "import": "./dist/duckdb-browser-mvp64.mjs",
+                "require": "./dist/duckdb-browser-mvp64.cjs"
+            },
+            "node": {
+                "types": "./dist/duckdb-node.d.ts",
+                "import": "./dist/duckdb-node-mvp64.cjs",
+                "require": "./dist/duckdb-node-mvp64.cjs"
+            },
+            "types": "./dist/duckdb-browser.d.ts",
+            "import": "./dist/duckdb-browser-mvp64.mjs",
+            "require": "./dist/duckdb-browser-mvp64.cjs"
+        },
+        "./wasm64-eh": {
+            "browser": {
+                "types": "./dist/duckdb-browser.d.ts",
+                "import": "./dist/duckdb-browser-eh64.mjs",
+                "require": "./dist/duckdb-browser-eh64.cjs"
+            },
+            "node": {
+                "types": "./dist/duckdb-node.d.ts",
+                "import": "./dist/duckdb-node-eh64.cjs",
+                "require": "./dist/duckdb-node-eh64.cjs"
+            },
+            "types": "./dist/duckdb-browser.d.ts",
+            "import": "./dist/duckdb-browser-eh64.mjs",
+            "require": "./dist/duckdb-browser-eh64.cjs"
+        },
+        "./wasm64-coi": {
+            "browser": {
+                "types": "./dist/duckdb-browser.d.ts",
+                "import": "./dist/duckdb-browser-coi64.mjs",
+                "require": "./dist/duckdb-browser-coi64.cjs"
+            },
+            "node": {
+                "types": "./dist/duckdb-node.d.ts",
+                "import": "./dist/duckdb-node-mvp64.cjs",
+                "require": "./dist/duckdb-node-mvp64.cjs"
+            },
+            "types": "./dist/duckdb-browser.d.ts",
+            "import": "./dist/duckdb-browser-coi64.mjs",
+            "require": "./dist/duckdb-browser-coi64.cjs"
+        },
         "./blocking": {
             "node": {
                 "types": "./dist/duckdb-node-blocking.d.ts",

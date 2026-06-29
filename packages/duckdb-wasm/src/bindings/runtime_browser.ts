@@ -15,6 +15,7 @@ import {
     PreparedDBFileHandle,
     packSRet,
     isWasm64,
+    checkWasm64Support,
 } from './runtime';
 import { DuckDBModule } from './duckdb_module';
 import * as udf from './udf_runtime';
@@ -768,5 +769,13 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         udf.callScalarUDF(BROWSER_RUNTIME, mod, response, funcId, descPtr, descSize, ptrsPtr, ptrsSize);
     },
 };
+
+export function assertBrowserWasm64Support(): void {
+    if (!checkWasm64Support()) {
+        throw new Error(
+            'This browser does not support 64-bit WebAssembly. Use { memoryModel: "wasm32" } instead.',
+        );
+    }
+}
 
 export default BROWSER_RUNTIME;

@@ -21,6 +21,8 @@ export interface DuckDBQueryConfig {
     castDecimalToDouble?: boolean;
 }
 
+export type DuckDBMemoryModel = 'wasm32' | 'wasm64';
+
 export interface DuckDBFilesystemConfig {
     reliableHeadRequests?: boolean;
     /**
@@ -91,4 +93,9 @@ export interface DuckDBConfig {
      * opfs string
      */
     opfs?: DuckDBOPFSConfig;
+    /**
+     * The WebAssembly memory model. Defaults to 'wasm32'.
+     * Use 'wasm64' to opt into 64-bit address space (requires browser support for Memory64 proposal).
+     */
+    memoryModel?: DuckDBMemoryModel;
 }

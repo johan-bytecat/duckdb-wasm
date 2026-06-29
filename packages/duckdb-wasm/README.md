@@ -230,3 +230,51 @@ await stmt.close();
 // Closing the connection will release statements as well
 await conn.close();
 ```
+
+## WASM64 (64-bit Memory)
+
+DuckDB-Wasm supports 64-bit WebAssembly (Memory64) as an opt-in feature. WASM64 lifts the 4 GB memory ceiling of WASM32, enabling larger databases and queries.
+
+**Browser requirements:** Chrome >= 109, Firefox >= 119, Safari >= 17, or any browser supporting the [Memory64 proposal](https://github.com/WebAssembly/memory64).
+
+**Node.js requirements:** Node.js >= 20.
+
+### Opting into WASM64
+
+Set `memoryModel: 'wasm64'` in `DuckDBConfig`:
+
+```ts
+import * as duckdb from '@duckdb/duckdb-wasm';
+
+const db = new duckdb.AsyncDuckDB(logger, worker);
+await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+await db.open({
+    path: ':memory:',
+    memoryModel: 'wasm64',
+});
+```
+
+If the browser or Node.js version does not support WASM64, a clear error is thrown: *"This browser does not support 64-bit WebAssembly."*
+
+### Using WASM64-specific submodule exports
+
+For direct imports of WASM64 variants:
+
+```ts
+// WASM64 MVP variant
+import * as duckdb from '@duckdb/duckdb-wasm/wasm64-mvp';
+
+// WASM64 EH (exception handling) variant
+import * as duckdb from '@duckdb/duckdb-wasm/wasm64-eh';
+
+// WASM64 COI (cross-origin isolated, threads) variant
+import * as duckdb from '@duckdb/duckdb-wasm/wasm64-coi';
+```
+
+### Performance tradeoffs
+
+- WASM64 pointers are 8 bytes instead of 4, slightly increasing memory usage for pointer-heavy data structures.
+- BigInt arithmetic in JavaScript is slower than Number arithmetic for address calculations.
+- WASM64 provides a vastly larger address space (4 TB practical limit vs 4 GB), enabling workloads that were previously impossible in the browser.
+
+The default memory model remains `wasm32` for backward compatibility and optimal performance on smaller workloads.

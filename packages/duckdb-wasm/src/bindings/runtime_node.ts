@@ -11,6 +11,7 @@ import {
     FileFlags,
     packSRet,
     isWasm64,
+    checkWasm64Support,
 } from './runtime';
 import { StatusCode } from '../status';
 import { DuckDBModule } from './duckdb_module';
@@ -338,5 +339,13 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         udf.callScalarUDF(NODE_RUNTIME, mod, response, funcId, descPtr, descSize, ptrsPtr, ptrsSize);
     },
 };
+
+export function assertNodeWasm64Support(): void {
+    if (!checkWasm64Support()) {
+        throw new Error(
+            'This Node.js version does not support 64-bit WebAssembly. Node.js >= 20 is required. Use { memoryModel: "wasm32" } instead.',
+        );
+    }
+}
 
 export default NODE_RUNTIME;

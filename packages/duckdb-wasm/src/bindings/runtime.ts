@@ -10,6 +10,21 @@ export function setMemoryModel(mod: DuckDBModule): void {
     mod._free(ptr);
 }
 
+export function checkWasm64Support(): boolean {
+    try {
+        if (typeof WebAssembly === 'undefined' || typeof WebAssembly.validate !== 'function') {
+            return false;
+        }
+        const bytes = new Uint8Array([
+            0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+            0x05, 0x04, 0x01, 0x10, 0x00,
+        ]);
+        return WebAssembly.validate(bytes);
+    } catch {
+        return false;
+    }
+}
+
 /** Wrapper for TextDecoder to support shared array buffers */
 function TextDecoderWrapper(): (input?: BufferSource) => string {
     const decoder = new TextDecoder();

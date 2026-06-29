@@ -1,5 +1,6 @@
 import * as check from 'wasm-feature-detect';
 import { PACKAGE_NAME, PACKAGE_VERSION } from './version';
+import { checkWasm64Support } from './bindings/runtime';
 
 // Platform check taken from here:
 // https://github.com/xtermjs/xterm.js/blob/master/src/common/Platform.ts#L21
@@ -38,6 +39,21 @@ export interface DuckDBBundles {
         mainWorker: string;
         pthreadWorker: string;
     };
+    wasm64?: {
+        mvp: {
+            mainModule: string;
+            mainWorker: string;
+        };
+        eh?: {
+            mainModule: string;
+            mainWorker: string;
+        };
+        coi?: {
+            mainModule: string;
+            mainWorker: string;
+            pthreadWorker: string;
+        };
+    };
 }
 
 export function getJsDelivrBundles(): DuckDBBundles {
@@ -51,7 +67,16 @@ export function getJsDelivrBundles(): DuckDBBundles {
             mainModule: `${jsdelivr_dist_url}duckdb-eh.wasm`,
             mainWorker: `${jsdelivr_dist_url}duckdb-browser-eh.worker.js`,
         },
-        // COI is still experimental, let the user opt in explicitly
+        wasm64: {
+            mvp: {
+                mainModule: `${jsdelivr_dist_url}duckdb-mvp64.wasm`,
+                mainWorker: `${jsdelivr_dist_url}duckdb-browser-mvp64.worker.js`,
+            },
+            eh: {
+                mainModule: `${jsdelivr_dist_url}duckdb-eh64.wasm`,
+                mainWorker: `${jsdelivr_dist_url}duckdb-browser-eh64.worker.js`,
+            },
+        },
     };
 }
 
@@ -68,6 +93,7 @@ export interface PlatformFeatures {
     wasmSIMD: boolean;
     wasmBulkMemory: boolean;
     wasmThreads: boolean;
+    wasmMemory64: boolean;
 }
 
 let bigInt64Array: boolean | null = null;
@@ -75,6 +101,7 @@ let wasmExceptions: boolean | null = null;
 let wasmThreads: boolean | null = null;
 let wasmSIMD: boolean | null = null;
 let wasmBulkMemory: boolean | null = null;
+let wasmMemory64: boolean | null = null;
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 declare namespace globalThis {
@@ -97,6 +124,9 @@ export async function getPlatformFeatures(): Promise<PlatformFeatures> {
     if (wasmBulkMemory == null) {
         wasmBulkMemory = await check.bulkMemory();
     }
+    if (wasmMemory64 == null) {
+        wasmMemory64 = checkWasm64Support();
+    }
     return {
         bigInt64Array: bigInt64Array!,
         crossOriginIsolated: isNode() || globalThis.crossOriginIsolated || false,
@@ -104,11 +134,35 @@ export async function getPlatformFeatures(): Promise<PlatformFeatures> {
         wasmSIMD: wasmSIMD!,
         wasmThreads: wasmThreads!,
         wasmBulkMemory: wasmBulkMemory!,
+        wasmMemory64: wasmMemory64!,
     };
 }
 
 export async function selectBundle(bundles: DuckDBBundles): Promise<DuckDBBundle> {
     const platform = await getPlatformFeatures();
+    if (platform.wasmMemory64 && bundles.wasm64) {
+        if (platform.wasmExceptions) {
+            if (platform.wasmSIMD && platform.wasmThreads && platform.crossOriginIsolated && bundles.wasm64.coi) {
+                return {
+                    mainModule: bundles.wasm64.coi.mainModule,
+                    mainWorker: bundles.wasm64.coi.mainWorker,
+                    pthreadWorker: bundles.wasm64.coi.pthreadWorker,
+                };
+            }
+            if (bundles.wasm64.eh) {
+                return {
+                    mainModule: bundles.wasm64.eh.mainModule,
+                    mainWorker: bundles.wasm64.eh.mainWorker,
+                    pthreadWorker: null,
+                };
+            }
+        }
+        return {
+            mainModule: bundles.wasm64.mvp.mainModule,
+            mainWorker: bundles.wasm64.mvp.mainWorker,
+            pthreadWorker: null,
+        };
+    }
     if (platform.wasmExceptions) {
         if (platform.wasmSIMD && platform.wasmThreads && platform.crossOriginIsolated && bundles.coi) {
             return {
