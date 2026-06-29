@@ -12,4 +12,6 @@ export interface DuckDBModule extends EmscriptenModule {
 
     ccall: typeof ccall;
     PThread: PThread;
+
+    _calloc(num: number, size: number): number;
 }

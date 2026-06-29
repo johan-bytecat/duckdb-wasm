@@ -2,6 +2,14 @@ import { DuckDBModule } from './duckdb_module';
 import { UDFFunction } from './udf_function';
 import * as udf_rt from './udf_runtime';
 
+let isWasm64 = false;
+
+export function setMemoryModel(mod: DuckDBModule): void {
+    const ptr = mod._malloc(1) as any;
+    isWasm64 = typeof ptr === 'bigint';
+    mod._free(ptr);
+}
+
 /** Wrapper for TextDecoder to support shared array buffers */
 function TextDecoderWrapper(): (input?: BufferSource) => string {
     const decoder = new TextDecoder();
@@ -32,6 +40,23 @@ export function copyBuffer(mod: DuckDBModule, begin: number, length: number): Ui
 /** Decode a string */
 export function readString(mod: DuckDBModule, begin: number, length: number): string {
     return decodeText(mod.HEAPU8.subarray(begin, begin + length));
+}
+
+/** Copy a buffer from WASM64 heap */
+export function copyBuffer64(mod: DuckDBModule, begin: bigint, length: bigint): Uint8Array {
+    const start = Number(begin);
+    const end = Number(begin + length);
+    const buffer = mod.HEAPU8.subarray(start, end);
+    const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
+    copy.set(buffer);
+    return copy;
+}
+
+/** Decode a string from WASM64 heap */
+export function readString64(mod: DuckDBModule, begin: bigint, length: bigint): string {
+    const start = Number(begin);
+    const end = Number(begin + length);
+    return decodeText(mod.HEAPU8.subarray(start, end));
 }
 
 /** The data protocol */
@@ -102,8 +127,7 @@ export interface PreparedDBFileHandle {
     fromCached: boolean;
 }
 
-/** Call a function with packed response buffer */
-export function callSRet(
+function callSRet32(
     mod: DuckDBModule,
     funcName: string,
     argTypes: Array<Emscripten.JSType>,
@@ -127,6 +151,39 @@ export function callSRet(
     // Restore the stack
     mod.stackRestore(stackPointer);
     return [status, data, dataSize];
+}
+
+function callSRet64(
+    mod: DuckDBModule,
+    funcName: string,
+    argTypes: Array<Emscripten.JSType>,
+    args: Array<any>,
+): [number, bigint, bigint] {
+    const stackPointer = mod.stackSave() as any;
+    const response = mod.stackAlloc(24) as any;
+    argTypes.unshift('number');
+    args.unshift(response);
+    mod.ccall(funcName, null, argTypes, args);
+    const view = new DataView(mod.HEAPU8.buffer);
+    const offset = Number(response);
+    const status = Number(view.getBigInt64(offset, true));
+    const data = view.getBigInt64(offset + 8, true);
+    const dataSize = view.getBigInt64(offset + 16, true);
+    mod.stackRestore(stackPointer);
+    return [status, data, dataSize];
+}
+
+/** Call a function with packed response buffer */
+export function callSRet(
+    mod: DuckDBModule,
+    funcName: string,
+    argTypes: Array<Emscripten.JSType>,
+    args: Array<any>,
+): [number, number | bigint, number | bigint] {
+    if (isWasm64) {
+        return callSRet64(mod, funcName, argTypes, args);
+    }
+    return callSRet32(mod, funcName, argTypes, args);
 }
 
 /** Drop response buffers */
