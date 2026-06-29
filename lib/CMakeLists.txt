@@ -149,7 +149,7 @@ if(EMSCRIPTEN)
 
   if(WASM_MEMORY64)
     string(REGEX REPLACE "^wasm_" "wasm64_" DUCKDB_PLATFORM "${DUCKDB_PLATFORM}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_MEMORY64")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_MEMORY64 -sMEMORY64=1 -sWASM_BIGINT=1")
     set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -DWASM_MEMORY64")
     set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -sMEMORY64=1 -sWASM_BIGINT=1")
     set(WASM_MAXIMUM_MEMORY_FLAG "")
@@ -163,6 +163,11 @@ else()
       "${CMAKE_CXX_FLAGS} -DWEBDB_FAST_EXCEPTIONS=1 -DWEBDB_THREADS=1")
 endif()
 
+# When loadable extensions are enabled, the main module is built with
+# MAIN_MODULE=1 (or MAIN_MODULE=2) to export all symbols for dynamic linking.
+# These flags are compatible with WASM64 (-sMEMORY64=1): Emscripten's
+# dynamic linking works correctly with the memory64 model. The
+# ALLOW_TABLE_GROWTH and FILESYSTEM=1 settings are also compatible.
 if (DUCKDB_WASM_LOADABLE_EXTENSIONS)
   set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -s FILESYSTEM=1 -s ENVIRONMENT='web,node,worker' -s ALLOW_TABLE_GROWTH -lembind")
 

@@ -400,6 +400,10 @@ app: wasm wasmpack shell docs js_tests_release
 build_loadable:
 	USE_GENERATED_EXPORTED_LIST=no DUCKDB_PLATFORM=wasm_${TARGET} DUCKDB_WASM_LOADABLE_EXTENSIONS=1 ./scripts/wasm_build_lib.sh relsize ${TARGET}
 
+build_loadable64:
+	WASM_MEMORY64=1 USE_GENERATED_EXPORTED_LIST=no DUCKDB_PLATFORM=wasm64_${TARGET} DUCKDB_WASM_LOADABLE_EXTENSIONS=1 ./scripts/wasm_build_lib.sh relsize ${TARGET}
+	WASM_MEMORY64=1 ./scripts/build_loadable.sh relsize ${TARGET}64
+
 build_loadable_unsigned: build_loadable
         # need to propagate the unsigned flag
 

@@ -545,6 +545,10 @@ index 50f95a2bb4..8f5ef30624 100644
 +		    }
 +
 +		    var valid = WebAssembly.validate(uInt8Array);
++		    if (!valid) {
++		            console.error("Extension validation failed. This extension was built for a different WebAssembly memory model than the database. Ensure the extension is built for the same memory model (32-bit or 64-bit) as the database: a WASM64 main module cannot load WASM32 extensions and vice versa.");
++		            return 0;
++		    }
 +		    var len = uInt8Array.byteLength;
 +		    var fileOnWasmHeap = _malloc(len + 4);
 +
