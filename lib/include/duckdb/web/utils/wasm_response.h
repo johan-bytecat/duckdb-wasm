@@ -1,6 +1,8 @@
 #ifndef INCLUDE_DUCKDB_WEB_UTILS_WASM_RESPONSE_H_
 #define INCLUDE_DUCKDB_WEB_UTILS_WASM_RESPONSE_H_
 
+#include <cstdint>
+
 #include "arrow/io/buffered.h"
 #include "arrow/io/interfaces.h"
 #include "arrow/ipc/writer.h"
@@ -10,13 +12,28 @@ namespace web {
 
 struct DuckDBWasmResultsWrapper;
 
+/// Packed response buffer (24 bytes) read by JavaScript via HEAPF64 (WASM32) or HEAP64 (WASM64).
+/// Under WASM32, doubles can losslessly represent all 32-bit pointer values.
+/// Under WASM64, int64_t fields are required to store full 64-bit addresses.
 struct WASMResponse {
     /// The status code
+#ifdef WASM_MEMORY64
+    int64_t statusCode = 1;
+#else
     double statusCode = 1;
-    /// The data ptr of value (if any)
+#endif
+    /// The data ptr or value (if any)
+#ifdef WASM_MEMORY64
+    int64_t dataOrValue = 0;
+#else
     double dataOrValue = 0;
+#endif
     /// The data size
+#ifdef WASM_MEMORY64
+    int64_t dataSize = 0;
+#else
     double dataSize = 0;
+#endif
 } __attribute((packed));
 
 class WASMResponseBuffer {

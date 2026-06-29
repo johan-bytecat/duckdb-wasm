@@ -95,8 +95,14 @@ static duckdb::FileHandle &GetOrOpen(size_t file_id) {
 struct OpenedFile {
     /// The file size
     double file_size;
-    /// The file buffer
+    /// The file buffer (pointer from JS runtime).
+    /// Under WASM32, double can losslessly represent all 32-bit pointer values.
+    /// Under WASM64, uint64_t is needed for full 64-bit addresses.
+#ifdef WASM_MEMORY64
+    uint64_t file_buffer;
+#else
     double file_buffer;
+#endif
     /// The file time_t
     double file_last_modification;
 };
@@ -681,7 +687,13 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
                 auto owned = std::unique_ptr<OpenedFile>(static_cast<OpenedFile *>(opened));
                 file->file_size_ = owned->file_size;
                 file->last_modification_time_ = owned->file_last_modification;
+#ifdef WASM_MEMORY64
+                // file_buffer is uint64_t: uint64_t → uintptr_t → char*
                 auto *buffer_ptr = reinterpret_cast<char *>(static_cast<uintptr_t>(owned->file_buffer));
+#else
+                // file_buffer is double: double → uintptr_t → char*
+                auto *buffer_ptr = reinterpret_cast<char *>(static_cast<uintptr_t>(owned->file_buffer));
+#endif
 
                 // A buffer was returned, this can happen for 3 reasons:
                 //  1: The data source does not support HTTP range requests and allowFullHTTPRequests is true.
