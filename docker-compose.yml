@@ -1,7 +1,9 @@
 version: "3.0"
 services:
+  # EMSDK 3.1.71 includes WASM64 (Memory64) support via WASM_MEMORY64=1.
+  # Run wasm64 builds with: docker compose run --rm duckdb-wasm-ci make wasm64_dev
   duckdb-wasm-ci:
-    image: duckdb/wasm-ci:0.75
+    image: duckdb/wasm-ci:0.76
     build:
       context: ./actions/image
       args:

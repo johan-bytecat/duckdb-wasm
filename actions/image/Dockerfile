@@ -22,7 +22,7 @@ RUN apt-get update -qq \
     && export CHROME_BIN=/usr/bin/google-chrome \
     && rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/google.list
 
-ARG EMSDK_VERSION="3.1.56"
+ARG EMSDK_VERSION="3.1.71"
 RUN mkdir -p /opt/emsdk \
     && cd /opt/emsdk \
     && curl -SL https://github.com/emscripten-core/emsdk/archive/${EMSDK_VERSION}.tar.gz | tar -xz --strip-components=1 \
