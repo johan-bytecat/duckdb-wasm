@@ -79,6 +79,116 @@ class HTTPWasmClient : public HTTPClient {
         }
 
         char *exe = NULL;
+#ifdef WASM_MEMORY64
+        exe = (char *)EM_ASM_PTR(
+            {
+                var url = (UTF8ToString($0));
+                if (typeof XMLHttpRequest === "undefined") {
+                    return 0;
+                }
+                const xhr = new XMLHttpRequest();
+		if (false && url.startsWith("http://")) {
+			url = "https://" + url.substr(7);
+		}
+                xhr.open(UTF8ToString($3), url, false);
+                xhr.responseType = "arraybuffer";
+
+                var i = 0;
+                var len = $1;
+                while (i < len*2) {
+                    var ptr1 = HEAP64[($2 >> 3) + i ];
+                    var ptr2 = HEAP64[($2 >> 3) + i + 1];
+
+                    try {
+			var z = encodeURI(UTF8ToString(ptr1));
+			if (z === "Host") z = "X-Host-Override";
+			if (z === "User-Agent") {}
+			else if (z === "Authorization") {
+                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
+			} else {
+
+                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+			}
+                    } catch (error) {
+                console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
+                    }
+                    i += 2;
+                }
+
+                try {
+                    xhr.send(null);
+                } catch {
+                    return 0;
+                }
+                if (xhr.status >= 400) return 0;
+                var uInt8Array = xhr.response;
+
+                var len = uInt8Array.byteLength;
+                var fileOnWasmHeap = _malloc(len + 8);
+
+                var properArray = new Uint8Array(uInt8Array);
+
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + fileOnWasmHeap + 8] = properArray[iii];
+                }
+
+                var LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
+
+		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+		len = headers.byteLength;
+                var headersOnWasmHeap = _malloc(len + 8);
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
+                }
+
+                LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
+
+		len = headersOnWasmHeap;
+                LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap);
+
+                return fileOnWasmHeap;
+            },
+            path.c_str(), n, z, "GET");
+#else
         exe = (char *)EM_ASM_PTR(
             {
                 var url = (UTF8ToString($0));
@@ -187,6 +297,7 @@ class HTTPWasmClient : public HTTPClient {
                 return fileOnWasmHeap;
             },
             path.c_str(), n, z, "GET");
+#endif
         // clang-format on
 
         i = 0;
@@ -313,6 +424,117 @@ class HTTPWasmClient : public HTTPClient {
 
         // clang-format off
         char *exe = NULL;
+#ifdef WASM_MEMORY64
+        exe = (char *)EM_ASM_PTR(
+            {
+                var url = (UTF8ToString($0));
+                if (typeof XMLHttpRequest === "undefined") {
+                    return 0;
+                }
+                const xhr = new XMLHttpRequest();
+		if (false && url.startsWith("http://")) {
+			url = "https://" + url.substr(7);
+		}
+                xhr.open(UTF8ToString($3), url, false);
+                xhr.responseType = "arraybuffer";
+
+                var i = 0;
+                var len = $1;
+                while (i < len*2) {
+                    var ptr1 = HEAP64[($2 >> 3) + i ];
+                    var ptr2 = HEAP64[($2 >> 3) + i + 1];
+
+console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
+                    try {
+			var z = encodeURI(UTF8ToString(ptr1));
+			if (z === "Host") z = "X-Host-Override";
+			if (z === "User-Agent") {}
+			else if (z === "Authorization") {
+                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
+			} else {
+				
+                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+			}
+                    } catch (error) {
+                console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
+                    }
+                    i += 2;
+                }
+
+                try {
+                    xhr.send(null);
+                } catch {
+                    return 0;
+                }
+                if (xhr.status >= 400) return 0;
+
+                var uInt8Array = xhr.response;
+                var len = uInt8Array.byteLength;
+                var fileOnWasmHeap = _malloc(len + 8);
+
+                var properArray = new Uint8Array(uInt8Array);
+
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + fileOnWasmHeap + 8] = properArray[iii];
+                }
+
+                var LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap + 4);
+
+		var headers = Uint8Array.from(Array.from(xhr.getAllResponseHeaders()).map(letter => letter.charCodeAt(0)));
+		len = headers.byteLength;
+                var headersOnWasmHeap = _malloc(len + 8);
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + headersOnWasmHeap + 8] = headers[iii];
+                }
+
+                LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, headersOnWasmHeap + 4);
+
+		len = headersOnWasmHeap;
+                LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap);
+
+                return fileOnWasmHeap;
+            },
+            path.c_str(), n, z, "HEAD");
+#else
         exe = (char *)EM_ASM_PTR(
             {
                 var url = (UTF8ToString($0));
@@ -422,6 +644,7 @@ console.log('HEAD', UTF8ToString(ptr1), UTF8ToString(ptr2));
                 return fileOnWasmHeap;
             },
             path.c_str(), n, z, "HEAD");
+#endif
 
         i = 0;
 
@@ -561,6 +784,83 @@ res->headers.Insert(head, tail);
 
         // clang-format off
         char *exe = NULL;
+#ifdef WASM_MEMORY64
+        exe = (char *)EM_ASM_PTR(
+            {
+                var url = (UTF8ToString($0));
+                if (typeof XMLHttpRequest === "undefined") {
+                    return 0;
+                }
+                const xhr = new XMLHttpRequest();
+		if (false && url.startsWith("http://")) {
+			url = "https://" + url.substr(7);
+		}
+                xhr.open(UTF8ToString($3), url, false);
+                xhr.responseType = "arraybuffer";
+
+                var i = 0;
+                var len = $1;
+                while (i < len*2) {
+                    var ptr1 = HEAP64[($2 >> 3) + i ];
+                    var ptr2 = HEAP64[($2 >> 3) + i + 1];
+
+                    try {
+			var z = encodeURI(UTF8ToString(ptr1));
+			if (z === "Host") z = "X-Host-Override";
+			if (z === "User-Agent") {}
+			else if (z === "Authorization") {
+                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
+			} else {
+				
+                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+			}
+                    } catch (error) {
+                console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
+                    }
+                    i += 2;
+                }
+
+//xhr.setRequestHeader("Content-Type", "application/octet-stream");
+//xhr.setRequestHeader("Content-Type", "text/json");
+                try {
+			var post_payload = new Uint8Array($5);
+
+			for (var iii = 0; iii < $5; iii++) {
+				post_payload[iii] = Module.HEAPU8[iii + $4];
+			}
+			xhr.send(post_payload);
+                } catch {
+                    return 0;
+                }
+                if (xhr.status >= 400) return 0;
+                var uInt8Array = xhr.response;
+
+                var len = uInt8Array.byteLength;
+                var fileOnWasmHeap = _malloc(len + 4);
+
+                var properArray = new Uint8Array(uInt8Array);
+
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + fileOnWasmHeap + 4] = properArray[iii];
+                }
+                var LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap);
+                return fileOnWasmHeap;
+            },
+            path.c_str(), n, z, "POST", payload, buffer_length);
+#else
         exe = (char *)EM_ASM_PTR(
             {
                 var url = (UTF8ToString($0));
@@ -636,6 +936,7 @@ res->headers.Insert(head, tail);
                 return fileOnWasmHeap;
             },
             path.c_str(), n, z, "POST", payload, buffer_length);
+#endif
         // clang-format on
 
         free(payload);
@@ -717,6 +1018,83 @@ res->headers.Insert(head, tail);
 
         // clang-format off
         char *exe = NULL;
+#ifdef WASM_MEMORY64
+        exe = (char *)EM_ASM_PTR(
+            {
+                var url = (UTF8ToString($0));
+                if (typeof XMLHttpRequest === "undefined") {
+                    return 0;
+                }
+                const xhr = new XMLHttpRequest();
+		if (false && url.startsWith("http://")) {
+			url = "https://" + url.substr(7);
+		}
+                xhr.open(UTF8ToString($3), url, false);
+                xhr.responseType = "arraybuffer";
+
+                var i = 0;
+                var len = $1;
+                while (i < len*2) {
+                    var ptr1 = HEAP64[($2 >> 3) + i ];
+                    var ptr2 = HEAP64[($2 >> 3) + i + 1];
+
+                    try {
+			var z = encodeURI(UTF8ToString(ptr1));
+			if (z === "Host") z = "X-Host-Override";
+			if (z === "User-Agent") {}
+			else if (z === "Authorization") {
+                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
+			} else {
+				
+                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+			}
+                    } catch (error) {
+                console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
+                    }
+                    i += 2;
+                }
+
+//xhr.setRequestHeader("Content-Type", "application/octet-stream");
+//xhr.setRequestHeader("Content-Type", "text/json");
+                try {
+			var post_payload = new Uint8Array($5);
+
+			for (var iii = 0; iii < $5; iii++) {
+				post_payload[iii] = Module.HEAPU8[iii + $4];
+			}
+			xhr.send(post_payload);
+                } catch {
+                    return 0;
+                }
+                if (xhr.status >= 400) return 0;
+		var uInt8Array = Uint8Array.from(Array.from(xhr.getResponseHeader("Etag")).map(letter => letter.charCodeAt(0)));
+
+                var len = uInt8Array.byteLength;
+                var fileOnWasmHeap = _malloc(len + 4);
+
+                var properArray = new Uint8Array(uInt8Array);
+
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + fileOnWasmHeap + 4] = properArray[iii];
+                }
+                var LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap);
+                return fileOnWasmHeap;
+            },
+            path.c_str(), n, z, "PUT", payload, buffer_length);
+#else
         exe = (char *)EM_ASM_PTR(
             {
                 var url = (UTF8ToString($0));
@@ -792,6 +1170,7 @@ res->headers.Insert(head, tail);
                 return fileOnWasmHeap;
             },
             path.c_str(), n, z, "PUT", payload, buffer_length);
+#endif
         // clang-format on
 
         free(payload);
@@ -869,6 +1248,76 @@ res->headers.Insert(head, tail);
 
         // clang-format off
         char *exe = NULL;
+#ifdef WASM_MEMORY64
+        exe = (char *)EM_ASM_PTR(
+            {
+                var url = (UTF8ToString($0));
+                if (typeof XMLHttpRequest === "undefined") {
+                    return 0;
+                }
+                const xhr = new XMLHttpRequest();
+		if (false && url.startsWith("http://")) {
+			url = "https://" + url.substr(7);
+		}
+                xhr.open(UTF8ToString($3), url, false);
+                xhr.responseType = "arraybuffer";
+
+                var i = 0;
+                var len = $1;
+                while (i < len*2) {
+                    var ptr1 = HEAP64[($2 >> 3) + i ];
+                    var ptr2 = HEAP64[($2 >> 3) + i + 1];
+
+                    try {
+			var z = encodeURI(UTF8ToString(ptr1));
+			if (z === "Host") z = "X-Host-Override";
+			if (z === "User-Agent") {}
+			else if (z === "Authorization") {
+                        	xhr.setRequestHeader(z, UTF8ToString(ptr2));
+			} else {
+				
+                        	xhr.setRequestHeader(z, encodeURI(UTF8ToString(ptr2)));
+			}
+                    } catch (error) {
+                console.warn("Error while performing XMLHttpRequest.setRequestHeader()", error);
+                    }
+                    i += 2;
+                }
+
+                try {
+                    xhr.send(null);
+                } catch {
+                    return 0;
+                }
+                if (xhr.status >= 400) return 0;
+                var uInt8Array = xhr.response;
+
+                var len = uInt8Array.byteLength;
+                var fileOnWasmHeap = _malloc(len + 4);
+
+                var properArray = new Uint8Array(uInt8Array);
+
+                for (var iii = 0; iii < len; iii++) {
+                    Module.HEAPU8[iii + fileOnWasmHeap + 4] = properArray[iii];
+                }
+                var LEN123 = new Uint8Array(4);
+                LEN123[0] = len % 256;
+                len -= LEN123[0];
+                len /= 256;
+                LEN123[1] = len % 256;
+                len -= LEN123[1];
+                len /= 256;
+                LEN123[2] = len % 256;
+                len -= LEN123[2];
+                len /= 256;
+                LEN123[3] = len % 256;
+                len -= LEN123[3];
+                len /= 256;
+                Module.HEAPU8.set(LEN123, fileOnWasmHeap);
+                return fileOnWasmHeap;
+            },
+            path.c_str(), n, z, "DELETE");
+#else
         exe = (char *)EM_ASM_PTR(
             {
                 var url = (UTF8ToString($0));
@@ -937,6 +1386,7 @@ res->headers.Insert(head, tail);
                 return fileOnWasmHeap;
             },
             path.c_str(), n, z, "DELETE");
+#endif
         // clang-format on
 
         i = 0;
