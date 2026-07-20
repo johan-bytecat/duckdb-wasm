@@ -1014,7 +1014,6 @@ void WebFileSystem::MoveFile(const std::string& source, const std::string& targe
             files_by_url_.erase(iter);
             files_by_url_.insert({target, file});
         }
-
     }
     if (auto iter = files_by_name_.find(source); iter != files_by_name_.end()) {
         auto file = std::move(iter->second);
@@ -1024,7 +1023,6 @@ void WebFileSystem::MoveFile(const std::string& source, const std::string& targe
             files_by_name_.erase(iter);
             files_by_name_.insert({target, file});
         }
-
     }
 
     duckdb_web_fs_file_move(source.c_str(), source.size(), target.c_str(), target.size());
