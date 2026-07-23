@@ -19,6 +19,7 @@ enum WebDBFeature : uint32_t {
     SIMD = 2,
     BULK_MEMORY = 3,
     BIGINT64ARRAY = 4,
+    MEMORY64 = 5,
 };
 
 constexpr uint32_t STATIC_WEBDB_FEATURES = (0
@@ -33,6 +34,9 @@ constexpr uint32_t STATIC_WEBDB_FEATURES = (0
 #endif
 #ifdef WEBDB_BULK_MEMORY
                                             | (1 << WebDBFeature::BULK_MEMORY)
+#endif
+#ifdef WASM_MEMORY64
+                                            | (1 << WebDBFeature::MEMORY64)
 #endif
 );
 

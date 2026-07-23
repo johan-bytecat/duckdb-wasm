@@ -62,13 +62,20 @@ async function main() {
             const ptr = mod._malloc(16);
             const ptrType = typeof ptr;
             console.log(`    _malloc(16) returned: ${ptr} (type: ${ptrType})`);
-            if (ptrType !== 'bigint') {
-                console.error(`    Expected BigInt return from _malloc in WASM64, got ${ptrType}`);
+            if (ptrType !== 'number') {
+                console.error(`    Expected Emscripten's legalized number pointer, got ${ptrType}`);
                 process.exit(1);
             }
             mod._free(ptr);
             console.log('    _free(ptr) completed');
         }
+
+        const featureFlags = mod.ccall('duckdb_web_get_feature_flags', 'number', [], []);
+        if ((featureFlags & (1 << 5)) === 0) {
+            console.error('    WASM_MEMORY64 feature flag: MISSING');
+            process.exit(1);
+        }
+        console.log('    WASM_MEMORY64 feature flag: available');
 
         if (missing.length > 0) {
             console.error('Some essential exports are missing');

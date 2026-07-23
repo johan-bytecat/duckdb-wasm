@@ -5,9 +5,9 @@ import * as udf_rt from './udf_runtime';
 export let isWasm64 = false;
 
 export function setMemoryModel(mod: DuckDBModule): void {
-    const ptr = mod._malloc(1) as any;
-    isWasm64 = typeof ptr === 'bigint';
-    mod._free(ptr);
+    const memory64Feature = 1 << 5;
+    const features = mod.ccall('duckdb_web_get_feature_flags', 'number', [], []);
+    isWasm64 = (features & memory64Feature) !== 0;
 }
 
 export function checkWasm64Support(): boolean {
@@ -182,8 +182,8 @@ function callSRet64(
 ): [number, bigint, bigint] {
     const stackPointer = mod.stackSave() as any;
     const response = mod.stackAlloc(24) as any;
-    argTypes.unshift('number');
-    args.unshift(response);
+    argTypes.unshift('pointer' as Emscripten.JSType);
+    args.unshift(BigInt(response));
     mod.ccall(funcName, null, argTypes, args);
     const view = new DataView(mod.HEAPU8.buffer);
     const offset = Number(response);

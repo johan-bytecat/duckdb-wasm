@@ -28,6 +28,7 @@ export enum DuckDBFeature {
     WASM_SIMD = 1 << 2,
     WASM_BULK_MEMORY = 1 << 3,
     EMIT_BIGINT = 1 << 4,
+    WASM_MEMORY64 = 1 << 5,
 }
 
 /** The proxy for either the browser- order node-based DuckDB API */
