@@ -121,7 +121,6 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
     if (wasm64EhExists) patchFile('./src/bindings/duckdb-eh64.js', 'child_process');
     if (wasm64CoiExists) {
         patchFile('./src/bindings/duckdb-coi64.js', 'child_process');
-        patchFile('./src/bindings/duckdb-coi64.pthread.js', 'vm');
     }
 
     // -------------------------------

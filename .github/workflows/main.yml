@@ -615,7 +615,6 @@ jobs:
                   name: wasm-coi64
                   path: |
                       ./packages/duckdb-wasm/src/bindings/duckdb-coi64.js
-                      ./packages/duckdb-wasm/src/bindings/duckdb-coi64.pthread.js
                       ./packages/duckdb-wasm/src/bindings/duckdb-coi64.wasm
                   retention-days: 1
 
