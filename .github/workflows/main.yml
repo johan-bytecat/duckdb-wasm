@@ -801,6 +801,9 @@ jobs:
             - wasm_mvp
             - wasm_eh
             - wasm_coi
+            - wasm64_mvp
+            - wasm64_eh
+            - wasm64_coi
             - clang_format
             - eslint
         steps:
@@ -811,7 +814,7 @@ jobs:
 
             - uses: actions/setup-node@v6
               with:
-                  node-version: '18.x'
+                  node-version: '24.x'
                   registry-url: 'https://registry.npmjs.org'
 
             - name: Git submodule status
@@ -866,6 +869,21 @@ jobs:
             - uses: actions/download-artifact@v8
               with:
                   name: wasm-coi
+                  path: ./packages/duckdb-wasm/src/bindings/
+
+            - uses: actions/download-artifact@v8
+              with:
+                  name: wasm-mvp64
+                  path: ./packages/duckdb-wasm/src/bindings/
+
+            - uses: actions/download-artifact@v8
+              with:
+                  name: wasm-eh64
+                  path: ./packages/duckdb-wasm/src/bindings/
+
+            - uses: actions/download-artifact@v8
+              with:
+                  name: wasm-coi64
                   path: ./packages/duckdb-wasm/src/bindings/
 
             - name: Prepare repository
