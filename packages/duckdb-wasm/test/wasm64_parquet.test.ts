@@ -165,7 +165,7 @@ export function testWasm64Parquet(db: () => duckdb.DuckDBBindings): void {
         it('10-column 1000-row parquet read with type verification', () => {
             conn.query(`CREATE TABLE wide AS
                 SELECT
-                    i::TINYINT AS t,
+                    (i % 128)::TINYINT AS t,
                     i::SMALLINT AS s,
                     i::INTEGER AS i,
                     i::BIGINT AS b,
@@ -268,7 +268,7 @@ export function testWasm64ParquetAsync(db: () => duckdb.AsyncDuckDB): void {
         it('async multiple parquet union', async () => {
             for (let j = 0; j < 5; j++) {
                 const file = `union${j}.parquet`;
-                await conn.query(`CREATE TABLE union_src AS SELECT i::INTEGER AS id, ${j}::INTEGER AS src FROM generate_series(1, 100) t(i)`);
+                await conn.query(`CREATE OR REPLACE TABLE union_src AS SELECT i::INTEGER AS id, ${j}::INTEGER AS src FROM generate_series(1, 100) t(i)`);
                 await conn.query(`COPY (SELECT * FROM union_src) TO '${file}' (FORMAT PARQUET)`);
             }
 
@@ -318,7 +318,7 @@ export function testWasm64ParquetAsync(db: () => duckdb.AsyncDuckDB): void {
 
             await conn.query(`CREATE TABLE large_str_src AS
                 SELECT i::INTEGER AS id,
-                       repeat(chr(65 + (i % 26)), ${strLen}) AS big_string
+                       repeat(chr((65 + (i % 26))::INTEGER), ${strLen}) AS big_string
                 FROM generate_series(1, ${rowCount}) t(i)`);
             await conn.query(`COPY (SELECT * FROM large_str_src) TO 'large_str.parquet' (FORMAT PARQUET)`);
 

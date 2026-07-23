@@ -13,7 +13,7 @@ import {
     FileFlags,
     readString,
     PreparedDBFileHandle,
-    packSRet,
+    packFileInfo,
     isWasm64,
     checkWasm64Support,
 } from './runtime';
@@ -47,12 +47,12 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             const [s, d, n] = callSRet(
                 mod,
                 'duckdb_web_fs_get_file_info_by_id',
-                ['number', 'number'],
+                ['bigint', 'bigint'],
                 [fileId, cached?.cacheEpoch || 0],
             );
             if (s !== StatusCode.SUCCESS) {
                 return null;
-            } else if (n === 0) {
+            } else if (Number(n) === 0) {
                 // Epoch is up to date
                 return cached!;
             }
@@ -85,12 +85,12 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             const [s, d, n] = callSRet(
                 mod,
                 'duckdb_web_get_global_file_info',
-                ['number'],
+                ['bigint'],
                 [BROWSER_RUNTIME._globalFileInfo?.cacheEpoch || 0],
             );
             if (s !== StatusCode.SUCCESS) {
                 return null;
-            } else if (n === 0) {
+            } else if (Number(n) === 0) {
                 // Epoch is up to date
                 return BROWSER_RUNTIME._globalFileInfo!;
             }
@@ -239,7 +239,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                         const src = new Uint8Array();
                         mod.HEAPU8.set(src, data);
                         const result = mod._malloc(3 * 8);
-                        packSRet(mod, result, 1, data, new Date().getTime() / 1000);
+                        packFileInfo(mod, result, 1, data, new Date().getTime() / 1000);
                         return result;
                     } else if ((flags & FileFlags.FILE_FLAGS_READ) == 0) {
                         throw new Error(`Opening file ${file.fileName} failed: unsupported file flags: ${flags}`);
@@ -269,7 +269,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 const result = mod._malloc(3 * 8);
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                packSRet(mod, result, +contentLength, 0, +modification_time);
+                                packFileInfo(mod, result, +contentLength, 0, +modification_time);
                                 return result;
                             }
                         } catch (e: any) {
@@ -333,7 +333,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 const result = mod._malloc(3 * 8);
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                packSRet(mod, result, +presumedLength, 0, +modification_time);
+                                packFileInfo(mod, result, +presumedLength, 0, +modification_time);
                                 return result;
                             }
                             if (
@@ -349,7 +349,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 const result = mod._malloc(3 * 8);
                                 let modification_time = 0;
                                 try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                                packSRet(mod, result, xhr.response.byteLength, data, +modification_time);
+                                packFileInfo(mod, result, xhr.response.byteLength, data, +modification_time);
                                 return result;
                             }
                             console.warn(`falling back to full HTTP read for: ${file.dataUrl}`);
@@ -373,7 +373,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                             const result = mod._malloc(3 * 8);
                             let modification_time = 0;
                             try { modification_time = new Date(xhr.getResponseHeader('Last-Modified')??"").getTime() / 1000; } catch (e: any) {console.warn(`Failed to get Last-Modified on request`);}
-                            packSRet(mod, result, xhr.response.byteLength, data, +modification_time);
+                            packFileInfo(mod, result, xhr.response.byteLength, data, +modification_time);
                             return result;
                         }
                     }
@@ -389,7 +389,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     const handle = BROWSER_RUNTIME._files?.get(file.fileName);
                     if (handle) {
                         const result = mod._malloc(3 * 8);
-                        packSRet(mod, result, handle.size, 0, 0);
+                        packFileInfo(mod, result, handle.size, 0, 0);
                         return result;
                     }
 
@@ -402,7 +402,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     console.warn(`Buffering missing file: ${file.fileName}`);
                     const result = mod._malloc(3 * 8);
                     const buffer = mod._malloc(1); // malloc(0) is allowed to return a nullptr
-                    packSRet(mod, result, 1, buffer, 0);
+                    packFileInfo(mod, result, 1, buffer, 0);
                     return result;
                 }
                 case DuckDBDataProtocol.BROWSER_FSACCESS: {
@@ -415,7 +415,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     }
                     const result = mod._malloc(3 * 8);
                     const fileSize = handle.getSize();
-                    packSRet(mod, result, fileSize, 0, 0);
+                    packFileInfo(mod, result, fileSize, 0, 0);
                     return result;
                 }
             }
@@ -558,6 +558,8 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
     },
     truncateFile: (mod: DuckDBModule, fileId: number, newSize: number) => {
+        fileId = Number(fileId);
+        newSize = Number(newSize);
         const file = BROWSER_RUNTIME.getFileInfo(mod, fileId);
         switch (file?.dataProtocol) {
             case DuckDBDataProtocol.HTTP:
@@ -582,6 +584,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         return 0;
     },
     readFile(mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) {
+        fileId = Number(fileId);
+        bytes = Number(bytes);
+        location = Number(location);
         if (bytes == 0) {
             // Be robust to empty reads
             return 0;
@@ -664,6 +669,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
     },
     writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
+        fileId = Number(fileId);
+        bytes = Number(bytes);
+        location = Number(location);
         const file = BROWSER_RUNTIME.getFileInfo(mod, fileId);
         switch (file?.dataProtocol) {
             case DuckDBDataProtocol.HTTP:

@@ -550,6 +550,21 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
         external: [...EXTERNALS_NODE, 'web-worker'],
     });
 
+    if (wasm64MvpExists && wasm64EhExists) {
+        console.log('[ ESBUILD ] tests-node-wasm64.cjs');
+        await esbuild.build({
+            entryPoints: ['./test/index_node_wasm64.ts'],
+            outfile: 'dist/tests-node-wasm64.cjs',
+            platform: 'node',
+            format: 'cjs',
+            target: TARGET_NODE,
+            bundle: true,
+            minify: false,
+            sourcemap: is_debug ? 'inline' : true,
+            external: [...EXTERNALS_NODE, 'web-worker'],
+        });
+    }
+
     // -------------------------------
     // Write declaration files
 

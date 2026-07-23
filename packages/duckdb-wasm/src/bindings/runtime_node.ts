@@ -9,7 +9,7 @@ import {
     decodeText,
     DuckDBDataProtocol,
     FileFlags,
-    packSRet,
+    packFileInfo,
     isWasm64,
     checkWasm64Support,
 } from './runtime';
@@ -31,17 +31,18 @@ export const NODE_RUNTIME: DuckDBRuntime & {
 
     resolveFileInfo(mod: DuckDBModule, fileId: number): DuckDBFileInfo | null {
         try {
+            fileId = Number(fileId);
             const cached = NODE_RUNTIME._fileInfoCache.get(fileId);
             const [s, d, n] = callSRet(
                 mod,
                 'duckdb_web_fs_get_file_info_by_id',
-                ['number', 'number'],
+                ['bigint', 'bigint'],
                 [fileId, cached?.cacheEpoch || 0],
             );
             if (s !== StatusCode.SUCCESS) {
                 failWith(mod, readString(mod, d, n));
                 return null;
-            } else if (n === 0) {
+            } else if (Number(n) === 0) {
                 // Epoch is up to date with WASM
                 dropResponseBuffers(mod);
                 return cached!;
@@ -72,6 +73,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     openFile(mod: DuckDBModule, fileId: number, flags: FileFlags): number {
         try {
+            fileId = Number(fileId);
             NODE_RUNTIME._fileInfoCache.delete(fileId);
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
@@ -89,18 +91,11 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                             fs.constants.O_CREAT | fs.constants.O_RDWR,
                             fs.constants.S_IRUSR | fs.constants.S_IWUSR,
                         );
-                        NODE_RUNTIME._filesById?.set(file.fileId!, fd);
                     }
+                    NODE_RUNTIME._filesById.set(file.fileId, fd);
                     const fileSize = fs.fstatSync(fd).size;
-                    const result = mod._malloc(2 * 8);
-                    if (isWasm64) {
-                        const view = new DataView(mod.HEAPU8.buffer);
-                        view.setBigInt64(Number(result), BigInt(+fileSize), true);
-                        view.setBigInt64(Number(result) + 8, BigInt(0), true);
-                    } else {
-                        mod.HEAPF64[(result >> 3) + 0] = +fileSize;
-                        mod.HEAPF64[(result >> 3) + 1] = 0;
-                    }
+                    const result = mod._malloc(isWasm64 ? 3 * 8 : 2 * 8);
+                    packFileInfo(mod, result, fileSize, 0, 0);
                     return result;
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:
@@ -118,6 +113,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     syncFile: (_mod: DuckDBModule, _fileId: number) => {},
     closeFile: (mod: DuckDBModule, fileId: number) => {
         try {
+            fileId = Number(fileId);
             const fileInfo = NODE_RUNTIME._fileInfoCache.get(fileId);
             NODE_RUNTIME._fileInfoCache.delete(fileId);
             switch (fileInfo?.dataProtocol) {
@@ -144,6 +140,8 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     dropFile: (mod: DuckDBModule, _fileNamePtr: number | bigint, _fileNameLen: number) => {},
     truncateFile: (mod: DuckDBModule, fileId: number, newSize: number) => {
         try {
+            fileId = Number(fileId);
+            newSize = Number(newSize);
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -164,6 +162,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     readFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
         try {
+            fileId = Number(fileId);
+            bytes = Number(bytes);
+            location = Number(location);
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -193,6 +194,9 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
         try {
+            fileId = Number(fileId);
+            bytes = Number(bytes);
+            location = Number(location);
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -221,6 +225,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     getLastFileModificationTime: (mod: DuckDBModule, fileId: number) => {
         try {
+            fileId = Number(fileId);
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -294,9 +299,10 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     moveFile: (mod: DuckDBModule, fromPtr: number | bigint, fromLen: number, toPtr: number | bigint, toLen: number) => {
         const from = readString(mod, fromPtr, fromLen);
         const to = readString(mod, toPtr, toLen);
+        fs.renameSync(from, to);
         const handle = NODE_RUNTIME._files?.get(from);
         if (handle !== undefined) {
-            NODE_RUNTIME._files!.delete(handle);
+            NODE_RUNTIME._files!.delete(from);
             NODE_RUNTIME._files!.set(to, handle);
         }
         for (const [key, value] of NODE_RUNTIME._fileInfoCache?.entries() || []) {
@@ -309,7 +315,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     checkFile: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
+            const path = readString(mod, pathPtr, pathLen);
             return fs.existsSync(path);
         } catch (e: any) {
             console.log(e);
@@ -319,7 +325,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
     },
     removeFile: (mod: DuckDBModule, pathPtr: number | bigint, pathLen: number) => {
         try {
-            const path = decodeText(mod.HEAPU8.subarray(Number(pathPtr), Number(pathPtr) + pathLen));
+            const path = readString(mod, pathPtr, pathLen);
             return fs.rmSync(path);
         } catch (e: any) {
             console.log(e);

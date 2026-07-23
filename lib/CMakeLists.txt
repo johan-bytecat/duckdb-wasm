@@ -278,14 +278,8 @@ else()
     duckdb_web_json
     ${CMAKE_SOURCE_DIR}/src/extensions/json_extension.cc)
 
-  set(EXTENSION_CACHE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../.ccache/extension")
-  set(JSON_EXTENSION_CACHE_FILE "${EXTENSION_CACHE_DIR}/json")
-
-  set(DUCKDB_WEB_JSON "")
-  if(EXISTS "${JSON_EXTENSION_CACHE_FILE}")
-    set(DUCKDB_WEB_JSON "duckdb_web_json")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_JSON_EXTENSION")
-  endif()
+  set(DUCKDB_WEB_JSON "duckdb_web_json")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_JSON_EXTENSION")
 
   target_link_libraries(duckdb_web duckdb duckdb_web_parquet ${DUCKDB_WEB_JSON} arrow rapidjson ${THREAD_LIBS})
   target_link_libraries(duckdb_web_parquet duckdb duckdb_parquet)

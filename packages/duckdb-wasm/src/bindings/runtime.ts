@@ -47,8 +47,8 @@ export function failWith(mod: DuckDBModule, msg: string): void {
 
 /** Copy a buffer */
 export function copyBuffer(mod: DuckDBModule, begin: number | bigint, length: number | bigint): Uint8Array {
-    if (typeof begin === 'bigint') {
-        return copyBuffer64(mod, begin, length as bigint);
+    if (typeof begin === 'bigint' || typeof length === 'bigint') {
+        return copyBuffer64(mod, BigInt(begin), BigInt(length));
     }
     const buffer = mod.HEAPU8.subarray(begin, begin + (length as number));
     const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
@@ -58,8 +58,8 @@ export function copyBuffer(mod: DuckDBModule, begin: number | bigint, length: nu
 
 /** Decode a string */
 export function readString(mod: DuckDBModule, begin: number | bigint, length: number | bigint): string {
-    if (typeof begin === 'bigint') {
-        return readString64(mod, begin, length as bigint);
+    if (typeof begin === 'bigint' || typeof length === 'bigint') {
+        return readString64(mod, BigInt(begin), BigInt(length));
     }
     return decodeText(mod.HEAPU8.subarray(begin, begin + (length as number)));
 }
@@ -67,7 +67,7 @@ export function readString(mod: DuckDBModule, begin: number | bigint, length: nu
 /** Copy a buffer from WASM64 heap */
 export function copyBuffer64(mod: DuckDBModule, begin: bigint, length: bigint): Uint8Array {
     const start = Number(begin);
-    const end = Number(begin + length);
+    const end = Number(begin + BigInt(length));
     const buffer = mod.HEAPU8.subarray(start, end);
     const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
     copy.set(buffer);
@@ -77,7 +77,7 @@ export function copyBuffer64(mod: DuckDBModule, begin: bigint, length: bigint): 
 /** Decode a string from WASM64 heap */
 export function readString64(mod: DuckDBModule, begin: bigint, length: bigint): string {
     const start = Number(begin);
-    const end = Number(begin + length);
+    const end = Number(begin + BigInt(length));
     return decodeText(mod.HEAPU8.subarray(start, end));
 }
 
@@ -185,7 +185,9 @@ function callSRet64(
     const response = mod.stackAlloc(24) as any;
     args = args.map((arg, i) => (argTypes[i] === 'bigint' ? BigInt(arg) : arg));
     argTypes.unshift('pointer');
-    args.unshift(BigInt(response));
+    // Emscripten legalizes pointer arguments at the JavaScript boundary to
+    // numbers, including for MEMORY64 modules.
+    args.unshift(Number(response));
     mod.ccall(funcName, null, argTypes as Array<Emscripten.JSType>, args);
     const view = new DataView(mod.HEAPU8.buffer);
     const offset = Number(response);
@@ -216,6 +218,25 @@ export function packSRet(mod: DuckDBModule, response: number | bigint, a: number
         packSRet64(mod, response, a, b, c);
     } else {
         packSRet32(mod, response as number, a as number, b as number, c as number);
+    }
+}
+
+/** Write the mixed double/pointer/double OpenedFile structure. */
+export function packFileInfo(
+    mod: DuckDBModule,
+    response: number | bigint,
+    fileSize: number,
+    fileBuffer: number | bigint,
+    modificationTime: number,
+): void {
+    if (isWasm64) {
+        const view = new DataView(mod.HEAPU8.buffer);
+        const offset = Number(response);
+        view.setFloat64(offset, fileSize, true);
+        view.setBigUint64(offset + 8, BigInt(fileBuffer), true);
+        view.setFloat64(offset + 16, modificationTime, true);
+    } else {
+        packSRet32(mod, response as number, fileSize, fileBuffer as number, modificationTime);
     }
 }
 

@@ -671,7 +671,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
                 'duckdb_web_fs_drop_files',
                 [
                     'pointer',
-                    'bigint'
+                    'number'
                 ],
                 [
                     pointerOfArray,

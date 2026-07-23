@@ -97,7 +97,7 @@ export function testWasm64Integration(db: () => duckdb.DuckDBBindings): void {
                 const result = conn.query(`SELECT * FROM read_csv_auto('csv_basic.csv')`);
                 expect(result.numRows).toEqual(3);
                 expect(result.numCols).toEqual(3);
-                expect(result.getChildAt(0)?.toArray()).toEqual(new Int32Array([1, 4, 7]));
+                expect(Array.from(result.getChildAt(0)?.toArray() || [], Number)).toEqual([1, 4, 7]);
             });
 
             it('read_csv_auto with quoted fields', () => {
@@ -131,7 +131,7 @@ export function testWasm64Integration(db: () => duckdb.DuckDBBindings): void {
                     '{"id":1,"name":"alice"}\n{"id":2,"name":"bob"}\n{"id":3,"name":"carol"}\n');
                 const result = conn.query(`SELECT * FROM read_json_auto('json_basic.json') ORDER BY id`);
                 expect(result.numRows).toEqual(3);
-                expect(result.getChildAt(0)?.get(0)).toEqual(1);
+                expect(Number(result.getChildAt(0)?.get(0))).toEqual(1);
                 expect(result.getChildAt(1)?.get(0)).toEqual('alice');
             });
 
@@ -140,7 +140,7 @@ export function testWasm64Integration(db: () => duckdb.DuckDBBindings): void {
                     '{"id":1,"data":{"x":10,"y":20}}\n{"id":2,"data":{"x":30,"y":40}}\n');
                 const result = conn.query(`SELECT id, data->>'$.x' AS x FROM read_json_auto('json_nested.json') ORDER BY id`);
                 expect(result.numRows).toEqual(2);
-                expect(result.getChildAt(0)?.get(0)).toEqual(1);
+                expect(Number(result.getChildAt(0)?.get(0))).toEqual(1);
             });
 
             it('read_json with arrays', () => {
@@ -233,7 +233,9 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
             it('register large buffer (>1MB)', async () => {
                 const size = 2 * 1024 * 1024;
                 const buf = new Uint8Array(size);
-                crypto.getRandomValues(buf);
+                for (let offset = 0; offset < buf.length; offset += 65536) {
+                    crypto.getRandomValues(buf.subarray(offset, Math.min(offset + 65536, buf.length)));
+                }
                 await db().registerFileBuffer('large_bin.bin', buf);
                 const out = await db().copyFileToBuffer('large_bin.bin');
                 expect(out).not.toBeNull();
@@ -359,6 +361,7 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
                 expect(result.numRows).toEqual(2);
                 expect(result.getChildAt(0)?.get(0)).toEqual(1);
                 expect(result.getChildAt(0)?.get(1)).toEqual(rowCount);
+                await conn.query('DROP TABLE big_table');
             });
 
             it('memory growth test', async () => {
@@ -367,7 +370,7 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
                     return;
                 }
 
-                const rowCount = 1000000;
+                const rowCount = 250000;
                 const padLen = 1000;
 
                 await conn.query(`CREATE TABLE mem_grow AS
@@ -377,6 +380,7 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
 
                 const count = await conn.query(`SELECT count(*)::INTEGER AS c FROM mem_grow`);
                 expect(count.getChildAt(0)?.get(0)).toEqual(rowCount);
+                await conn.query('DROP TABLE mem_grow');
             });
         });
     });

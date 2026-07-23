@@ -1,4 +1,3 @@
-import DuckDBWasm from './duckdb-mvp.js';
 import { DuckDBModule } from './duckdb_module';
 import { DuckDBBindingsBase } from './bindings_base';
 import { DuckDBRuntime } from './runtime';
@@ -11,7 +10,7 @@ declare global {
 }
 
 /** DuckDB bindings for node.js */
-export class DuckDBNodeBindings extends DuckDBBindingsBase {
+export abstract class DuckDBNodeBindings extends DuckDBBindingsBase {
     /** The path of the wasm module */
     protected readonly mainModulePath: string;
     /** The path of the pthread worker script */
@@ -61,11 +60,4 @@ export class DuckDBNodeBindings extends DuckDBBindingsBase {
         return [];
     }
 
-    /** Instantiate the bindings */
-    protected instantiateImpl(moduleOverrides: Partial<DuckDBModule>): Promise<DuckDBModule> {
-        return DuckDBWasm({
-            ...moduleOverrides,
-            instantiateWasm: this.instantiateWasm.bind(this),
-        });
-    }
 }
