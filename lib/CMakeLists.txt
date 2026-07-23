@@ -302,6 +302,7 @@ endif()
 if(EMSCRIPTEN)
   add_executable(duckdb_wasm ${CMAKE_SOURCE_DIR}/src/wasm_main.cc)
   target_link_libraries(duckdb_wasm duckdb_web ${THREAD_LIBS})
+  set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} ${WASM_LINK_FLAGS_EXT}")
   message(STATUS "WASM_LINK_FLAGS=${WASM_LINK_FLAGS}")
   set_target_properties(
     duckdb_wasm
