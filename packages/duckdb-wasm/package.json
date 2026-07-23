@@ -172,11 +172,7 @@
                 "import": "./dist/duckdb-browser-coi64.mjs",
                 "require": "./dist/duckdb-browser-coi64.cjs"
             },
-            "node": {
-                "types": "./dist/duckdb-node.d.ts",
-                "import": "./dist/duckdb-node-mvp64.cjs",
-                "require": "./dist/duckdb-node-mvp64.cjs"
-            },
+            "node": null,
             "types": "./dist/duckdb-browser.d.ts",
             "import": "./dist/duckdb-browser-coi64.mjs",
             "require": "./dist/duckdb-browser-coi64.cjs"
