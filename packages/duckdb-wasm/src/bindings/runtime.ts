@@ -3,6 +3,7 @@ import { UDFFunction } from './udf_function';
 import * as udf_rt from './udf_runtime';
 
 export let isWasm64 = false;
+export type DuckDBJSType = Emscripten.JSType | 'pointer' | 'bigint';
 
 export function setMemoryModel(mod: DuckDBModule): void {
     const memory64Feature = 1 << 5;
@@ -151,7 +152,7 @@ export interface PreparedDBFileHandle {
 function callSRet32(
     mod: DuckDBModule,
     funcName: string,
-    argTypes: Array<Emscripten.JSType>,
+    argTypes: Array<DuckDBJSType>,
     args: Array<any>,
 ): [number, number, number] {
     const stackPointer = mod.stackSave();
@@ -162,7 +163,7 @@ function callSRet32(
     args.unshift(response);
 
     // Do the call
-    mod.ccall(funcName, null, argTypes, args);
+    mod.ccall(funcName, null, argTypes as Array<Emscripten.JSType>, args);
 
     // Read the response
     const status = mod.HEAPF64[(response >> 3) + 0];
@@ -177,14 +178,15 @@ function callSRet32(
 function callSRet64(
     mod: DuckDBModule,
     funcName: string,
-    argTypes: Array<Emscripten.JSType>,
+    argTypes: Array<DuckDBJSType>,
     args: Array<any>,
 ): [number, bigint, bigint] {
     const stackPointer = mod.stackSave() as any;
     const response = mod.stackAlloc(24) as any;
-    argTypes.unshift('pointer' as Emscripten.JSType);
+    args = args.map((arg, i) => (argTypes[i] === 'bigint' ? BigInt(arg) : arg));
+    argTypes.unshift('pointer');
     args.unshift(BigInt(response));
-    mod.ccall(funcName, null, argTypes, args);
+    mod.ccall(funcName, null, argTypes as Array<Emscripten.JSType>, args);
     const view = new DataView(mod.HEAPU8.buffer);
     const offset = Number(response);
     const status = Number(view.getBigInt64(offset, true));
@@ -221,7 +223,7 @@ export function packSRet(mod: DuckDBModule, response: number | bigint, a: number
 export function callSRet(
     mod: DuckDBModule,
     funcName: string,
-    argTypes: Array<Emscripten.JSType>,
+    argTypes: Array<DuckDBJSType>,
     args: Array<any>,
 ): [number, number | bigint, number | bigint] {
     if (isWasm64) {

@@ -143,7 +143,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_tokenize_buffer',
-            ['number', 'number'],
+            ['pointer', 'bigint'],
             [bufferPtr, BUF.length],
         );
         this.mod._free(bufferPtr);
@@ -157,12 +157,12 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
 
     /** Connect to database */
     public connect(): DuckDBConnection {
-        const conn = this.mod.ccall('duckdb_web_connect', 'number', [], []);
+        const conn = this.mod.ccall('duckdb_web_connect', 'pointer' as Emscripten.JSType, [], []) as number | bigint;
         return new DuckDBConnection(this, conn);
     }
     /** Disconnect from database */
     public disconnect(conn: number | bigint): void {
-        this.mod.ccall('duckdb_web_disconnect', null, ['number'], [conn as number]);
+        this.mod.ccall('duckdb_web_disconnect', null, ['pointer' as Emscripten.JSType], [conn as number]);
         if (this.pthread) {
             for (const worker of [...this.pthread.runningWorkers, ...this.pthread.unusedWorkers]) {
                 worker.postMessage({
@@ -182,7 +182,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_query_run_buffer',
-            ['number', 'number', 'number'],
+            ['pointer', 'pointer', 'bigint'],
             [conn, bufferPtr, BUF.length],
         );
         this.mod._free(bufferPtr);
@@ -207,7 +207,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_pending_query_start_buffer',
-            ['number', 'number', 'number', 'boolean'],
+            ['pointer', 'pointer', 'bigint', 'boolean'],
             [conn, bufferPtr, BUF.length, allowStreamResult],
         );
         this.mod._free(bufferPtr);
@@ -223,7 +223,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
     /** Poll a pending query */
     public pollPendingQuery(conn: number | bigint): Uint8Array | null {
-        const [s, d, n] = callSRet(this.mod, 'duckdb_web_pending_query_poll', ['number'], [conn]);
+        const [s, d, n] = callSRet(this.mod, 'duckdb_web_pending_query_poll', ['pointer'], [conn]);
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
         }
@@ -236,11 +236,16 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
     /** Cancel a pending query */
     public cancelPendingQuery(conn: number | bigint): boolean {
-        return this.mod.ccall('duckdb_web_pending_query_cancel', 'boolean', ['number'], [conn as number]);
+        return this.mod.ccall(
+            'duckdb_web_pending_query_cancel',
+            'boolean',
+            ['pointer' as Emscripten.JSType],
+            [conn as number],
+        );
     }
     /** Fetch query results */
     public fetchQueryResults(conn: number | bigint): Uint8Array | null {
-        const [s, d, n] = callSRet(this.mod, 'duckdb_web_query_fetch_results', ['number'], [conn]);
+        const [s, d, n] = callSRet(this.mod, 'duckdb_web_query_fetch_results', ['pointer'], [conn]);
         if (IsDuckDBWasmRetry(s)) {
             dropResponseBuffers(this.mod);
             return null; // Retry
@@ -271,7 +276,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_get_tablenames_buffer',
-            ['number', 'number', 'number'],
+            ['pointer', 'pointer', 'bigint'],
             [conn, bufferPtr, BUF.length],
         );
         this.mod._free(bufferPtr);
@@ -306,7 +311,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_udf_scalar_create',
-            ['number', 'string'],
+            ['pointer', 'string'],
             [conn, JSON.stringify(decl)],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -336,7 +341,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_prepared_create_buffer',
-            ['number', 'number', 'number'],
+            ['pointer', 'pointer', 'bigint'],
             [conn, bufferPtr, BUF.length],
         );
         this.mod._free(bufferPtr);
@@ -349,7 +354,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
 
     /** Close a prepared statement */
     public closePrepared(conn: number | bigint, statement: number | bigint): void {
-        const [s, d, n] = callSRet(this.mod, 'duckdb_web_prepared_close', ['number', 'number'], [conn, statement]);
+        const [s, d, n] = callSRet(this.mod, 'duckdb_web_prepared_close', ['pointer', 'bigint'], [conn, statement]);
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
         }
@@ -361,7 +366,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_prepared_run',
-            ['number', 'number', 'string'],
+            ['pointer', 'bigint', 'string'],
             [conn, statement, JSON.stringify(params)],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -377,7 +382,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_prepared_send',
-            ['number', 'number', 'string'],
+            ['pointer', 'bigint', 'string'],
             [conn, statement, JSON.stringify(params)],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -401,7 +406,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_insert_arrow_from_ipc_stream',
-            ['number', 'number', 'number', 'string'],
+            ['pointer', 'pointer', 'bigint', 'string'],
             [conn, bufferPtr, buffer.length, optJSON],
         );
 
@@ -430,7 +435,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_insert_csv_from_path',
-            ['number', 'string', 'string'],
+            ['pointer', 'string', 'string'],
             [conn, path, optJSON],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -455,7 +460,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_insert_json_from_path',
-            ['number', 'string', 'string'],
+            ['pointer', 'string', 'string'],
             [conn, path, optJSON],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -484,7 +489,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_fs_register_file_url',
-            ['string', 'string'],
+            ['string', 'string', 'number', 'boolean'],
             [name, url, proto, directIO],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -505,7 +510,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_fs_register_file_buffer',
-            ['string', 'number', 'number'],
+            ['string', 'pointer', 'number'],
             [name, ptr, buffer.length],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -665,8 +670,8 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
                 this.mod,
                 'duckdb_web_fs_drop_files',
                 [
-                    'number',
-                    'number'
+                    'pointer',
+                    'bigint'
                 ],
                 [
                     pointerOfArray,
