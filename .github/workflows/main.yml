@@ -620,10 +620,19 @@ jobs:
                   retention-days: 1
 
     wasm64_smoke_test:
-        name: Wasm64 / Smoke Test
+        name: Wasm64 / Smoke Test / ${{ matrix.feature }}
         runs-on: ubuntu-latest
         needs:
             - wasm64_mvp
+            - wasm64_eh
+            - wasm64_coi
+        strategy:
+            fail-fast: false
+            matrix:
+                feature:
+                    - mvp64
+                    - eh64
+                    - coi64
         steps:
             - uses: actions/checkout@v6
               with:
@@ -636,12 +645,12 @@ jobs:
 
             - uses: actions/download-artifact@v8
               with:
-                  name: wasm-mvp64
+                  name: wasm-${{ matrix.feature }}
                   path: ./packages/duckdb-wasm/src/bindings/
 
             - name: Run WASM64 smoke test
               run: |
-                  node ./scripts/wasm64_smoke_test.js mvp64
+                  node ./scripts/wasm64_smoke_test.js ${{ matrix.feature }}
 
     wasm_mvp_loadable:
         name: Wasm / mvp (loadable version)

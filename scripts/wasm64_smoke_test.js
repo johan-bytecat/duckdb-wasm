@@ -39,15 +39,22 @@ async function main() {
         process.exit(1);
     }
 
+    globalThis.DUCKDB_RUNTIME = {
+        testPlatformFeature: () => true,
+        getDefaultDataProtocol: () => 0,
+    };
+
     const originalCwd = process.cwd();
     process.chdir(bindingsDir);
 
     try {
         const factory = require(jsFile);
-        const mod = await factory();
+        const mod = await factory({
+            locateFile: file => file.endsWith('.wasm') ? wasmFile : path.resolve(bindingsDir, file),
+        });
         console.log('  Emscripten module instantiated successfully');
 
-        const essentialExports = ['_malloc', '_free', '_stackAlloc', '_stackSave', '_stackRestore'];
+        const essentialExports = ['_malloc', '_free', 'stackAlloc', 'stackSave', 'stackRestore'];
         let missing = [];
         for (const func of essentialExports) {
             if (typeof mod[func] === 'function') {
