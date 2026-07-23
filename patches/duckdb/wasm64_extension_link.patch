@@ -1,0 +1,12 @@
+diff --git a/extension/extension_build_tools.cmake b/extension/extension_build_tools.cmake
+index 45162c0274..118cc95a91 100644
+--- a/extension/extension_build_tools.cmake
++++ b/extension/extension_build_tools.cmake
+@@ -192,7 +192,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTE
+         add_custom_command(
+                 TARGET ${TARGET_NAME}
+                 POST_BUILD
+-                COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS}" ${WASM_THREAD_FLAGS} ${TO_BE_LINKED}
++                COMMAND emcc $<TARGET_FILE:${TARGET_NAME}> -o $<TARGET_FILE:${TARGET_NAME}>.wasm -O3 -sSIDE_MODULE=2 -sEXPORTED_FUNCTIONS="${EXPORTED_FUNCTIONS}" ${WASM_THREAD_FLAGS} ${WASM_MEMORY_FLAGS} ${TO_BE_LINKED}
+         )
+     endif()
