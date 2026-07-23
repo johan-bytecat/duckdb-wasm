@@ -264,18 +264,12 @@ export function callScalarUDF(
         // Need to store three pointers, data, validity and length
         const retLen = 3 * 8;
         const retPtr = mod._malloc(retLen);
-        if (isWasm64) {
-            const view = new DataView(mod.HEAPU8.buffer);
-            const retOff = Number(retPtr);
-            view.setBigInt64(retOff, BigInt(resultDataPtr), true);
-            view.setBigInt64(retOff + 8, BigInt(resultValidityPtr), true);
-            view.setBigInt64(retOff + 16, BigInt(resultLengthsPtr), true);
-        } else {
-            const retBuffer = ptrToFloat64Array(mod, retPtr, 3);
-            retBuffer[0] = resultDataPtr as number;
-            retBuffer[1] = resultValidityPtr as number;
-            retBuffer[2] = resultLengthsPtr as number;
-        }
+        // This buffer is consumed as double* by CallScalarUDFFunction for both
+        // memory models. Only the outer WASMResponse changes layout in wasm64.
+        const retBuffer = ptrToFloat64Array(mod, retPtr, 3);
+        retBuffer[0] = Number(resultDataPtr);
+        retBuffer[1] = Number(resultValidityPtr);
+        retBuffer[2] = Number(resultLengthsPtr);
 
         // Pack response
         if (isWasm64) {
