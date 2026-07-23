@@ -43,7 +43,7 @@ RUN (id -g ${GID} &> /dev/null && id || groupadd -g ${GID} -o ${UNAME}) \
 
 ENV NVM_DIR=/opt/nvm
 ARG NVM_VERSION="v0.39.7"
-ARG NODE_VERSION="v20.11.1"
+ARG NODE_VERSION="v24.18.0"
 RUN mkdir -p /opt/nvm \
     && ls -lisah /opt/nvm \
     && curl https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash \
