@@ -928,6 +928,11 @@ jobs:
               shell: bash
               run: |
                       CHROME_BIN=`which google-chrome` yarn workspace @duckdb/duckdb-wasm test:chrome
+
+            - name: Test WASM64 variants on Chrome
+              shell: bash
+              run: |
+                      CHROME_BIN=`which google-chrome` yarn workspace @duckdb/duckdb-wasm test:chrome:wasm64
             
             #            - name: Test @duckdb/duckdb-wasm on Firefox
             #              uses: duckdb/duckdb-wasm-ci-env@f10a0954b7b2b98e8526e0f7bbcb10e614defcbd
@@ -939,6 +944,11 @@ jobs:
               shell: bash
               run: |
                       yarn workspace @duckdb/duckdb-wasm test:node
+
+            - name: Test WASM64 variants on Node.js
+              shell: bash
+              run: |
+                      yarn workspace @duckdb/duckdb-wasm test:node:wasm64
 
             - name: Coverage @duckdb/duckdb-wasm
               shell: bash
