@@ -215,7 +215,10 @@ export function testWasm64Integration(db: () => duckdb.DuckDBBindings): void {
     });
 }
 
-export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
+export function testWasm64IntegrationAsync(
+    db: () => duckdb.AsyncDuckDB,
+    isWasm64: () => boolean = getIsWasm64,
+): void {
     let conn: duckdb.AsyncDuckDBConnection;
 
     beforeEach(async () => {
@@ -344,7 +347,7 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
             }, 5000);
 
             it('large table creation and query', async () => {
-                const IS_WASM64 = getIsWasm64();
+                const IS_WASM64 = isWasm64();
                 const rowCount = IS_WASM64 ? 2000000 : 500000;
 
                 await conn.query(`CREATE TABLE big_table AS
@@ -365,7 +368,7 @@ export function testWasm64IntegrationAsync(db: () => duckdb.AsyncDuckDB): void {
             });
 
             it('memory growth test', async () => {
-                if (!getIsWasm64()) {
+                if (!isWasm64()) {
                     pending('WASM64 memory growth test requires WASM64 build');
                     return;
                 }

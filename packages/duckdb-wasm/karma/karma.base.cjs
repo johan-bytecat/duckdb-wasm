@@ -4,7 +4,7 @@ if (!process.env.CHROME_BIN) {
 
 const JS_TIMEOUT = 900000;
 
-module.exports = function (config) {
+module.exports = function (config, testBundle = 'tests-browser.js') {
     return {
         basePath: '../../..',
         plugins: [
@@ -23,7 +23,7 @@ module.exports = function (config) {
             silent: true,
         },
         files: [
-            { pattern: 'packages/duckdb-wasm/dist/tests-browser.js' },
+            { pattern: `packages/duckdb-wasm/dist/${testBundle}` },
             { pattern: 'packages/duckdb-wasm/dist/*.wasm', included: false, watched: false, served: true },
             { pattern: 'packages/duckdb-wasm/dist/*.js', included: false, watched: false, served: true },
             { pattern: 'packages/duckdb-wasm/dist/*.js.map', included: false, watched: false, served: true },

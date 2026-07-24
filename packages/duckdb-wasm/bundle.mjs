@@ -38,6 +38,7 @@ import { execSync } from 'child_process';
 
 const TARGET_BROWSER = ['chrome64', 'edge79', 'firefox62', 'safari11.1'];
 const TARGET_BROWSER_TEST = ['es2020'];
+const TARGET_BROWSER_WASM64 = ['es2020'];
 const TARGET_NODE = ['node14.6'];
 const EXTERNALS_NODE = ['apache-arrow'];
 const EXTERNALS_BROWSER = ['apache-arrow', 'module'];
@@ -258,7 +259,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             outfile: 'dist/duckdb-browser-mvp64.cjs',
             platform: 'browser',
             format: 'cjs',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -273,7 +274,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'esm',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -288,7 +289,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'iife',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -304,7 +305,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             outfile: 'dist/duckdb-browser-eh64.cjs',
             platform: 'browser',
             format: 'cjs',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -319,7 +320,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'esm',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -334,7 +335,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'iife',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -350,7 +351,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             outfile: 'dist/duckdb-browser-coi64.cjs',
             platform: 'browser',
             format: 'cjs',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -365,7 +366,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'esm',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -380,7 +381,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             platform: 'browser',
             format: 'iife',
             globalName: 'duckdb',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -394,7 +395,7 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             outfile: 'dist/duckdb-browser-coi64.pthread.worker.js',
             platform: 'browser',
             format: 'iife',
-            target: TARGET_BROWSER,
+            target: TARGET_BROWSER_WASM64,
             bundle: true,
             minify: !is_debug,
             sourcemap: is_debug ? 'inline' : true,
@@ -535,6 +536,27 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
         sourcemap: is_debug ? 'inline' : true,
         external: EXTERNALS_TEST_BROWSER,
     });
+
+    for (const variant of ['mvp64', 'eh64', 'coi64']) {
+        const exists = variant === 'mvp64' ? wasm64MvpExists : variant === 'eh64' ? wasm64EhExists : wasm64CoiExists;
+        if (!exists) continue;
+        console.log(`[ ESBUILD ] tests-browser-${variant}.js`);
+        await esbuild.build({
+            entryPoints: ['./test/index_browser_wasm64.ts'],
+            outfile: `dist/tests-browser-${variant}.js`,
+            platform: 'browser',
+            format: 'iife',
+            target: TARGET_BROWSER_TEST,
+            bundle: true,
+            minify: false,
+            sourcemap: true,
+            external: EXTERNALS_TEST_BROWSER,
+            define: {
+                'process.release.name': '"browser"',
+                WASM64_TEST_VARIANT: JSON.stringify(variant),
+            },
+        });
+    }
 
     console.log('[ ESBUILD ] tests-node.cjs');
     await esbuild.build({

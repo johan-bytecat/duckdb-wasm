@@ -4,6 +4,7 @@ export interface PThread {
 }
 
 export interface DuckDBModule extends EmscriptenModule {
+    mainScriptUrlOrBlob?: string | Blob;
     stackSave: typeof stackSave;
     stackAlloc: typeof stackAlloc;
     stackRestore: typeof stackRestore;

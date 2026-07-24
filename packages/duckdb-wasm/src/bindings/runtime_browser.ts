@@ -753,7 +753,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         const to = readString(mod, toPtr, toLen);
         const handle = BROWSER_RUNTIME._files?.get(from);
         if (handle !== undefined) {
-            BROWSER_RUNTIME._files!.delete(handle);
+            BROWSER_RUNTIME._files!.delete(from);
             BROWSER_RUNTIME._files!.set(to, handle);
         }
         for (const [key, value] of BROWSER_RUNTIME._fileInfoCache?.entries() || []) {

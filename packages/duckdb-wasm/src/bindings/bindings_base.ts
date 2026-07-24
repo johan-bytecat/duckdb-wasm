@@ -223,7 +223,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
     }
     /** Poll a pending query */
     public pollPendingQuery(conn: number | bigint): Uint8Array | null {
-        const [s, d, n] = callSRet(this.mod, 'duckdb_web_pending_query_poll', ['pointer'], [conn]);
+        const [s, d, n] = callSRet(this.mod, 'duckdb_web_pending_query_poll', ['pointer', 'pointer'], [conn, 0]);
         if (s !== StatusCode.SUCCESS) {
             throw new Error(readString(this.mod, d, n));
         }
@@ -239,8 +239,8 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         return this.mod.ccall(
             'duckdb_web_pending_query_cancel',
             'boolean',
-            ['pointer' as Emscripten.JSType],
-            [conn as number],
+            ['pointer' as Emscripten.JSType, 'pointer' as Emscripten.JSType],
+            [conn as number, 0],
         );
     }
     /** Fetch query results */
