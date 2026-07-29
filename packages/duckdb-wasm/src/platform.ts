@@ -141,7 +141,13 @@ export async function getPlatformFeatures(): Promise<PlatformFeatures> {
 
 export async function selectBundle(bundles: DuckDBBundles, memoryModel?: DuckDBMemoryModel): Promise<DuckDBBundle> {
     const platform = await getPlatformFeatures();
-    if (memoryModel === 'wasm64' && platform.wasmMemory64 && bundles.wasm64) {
+    if (memoryModel === 'wasm64') {
+        if (!platform.wasmMemory64) {
+            throw new Error('WASM64 is not supported by this platform');
+        }
+        if (!bundles.wasm64) {
+            throw new Error('WASM64 was requested but the bundle set does not provide wasm64 artifacts');
+        }
         if (platform.wasmExceptions) {
             if (platform.wasmSIMD && platform.wasmThreads && platform.crossOriginIsolated && bundles.wasm64.coi) {
                 return {

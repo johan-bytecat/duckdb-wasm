@@ -14,8 +14,9 @@ import {
     readString,
     PreparedDBFileHandle,
     packFileInfo,
-    isWasm64,
     checkWasm64Support,
+    wasmHeapRange,
+    wasmToSafeNumber,
 } from './runtime';
 import { DuckDBModule } from './duckdb_module';
 import * as udf from './udf_runtime';
@@ -557,9 +558,9 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             }
         }
     },
-    truncateFile: (mod: DuckDBModule, fileId: number, newSize: number) => {
+    truncateFile: (mod: DuckDBModule, fileId: number, newSize: number | bigint) => {
         fileId = Number(fileId);
-        newSize = Number(newSize);
+        newSize = wasmToSafeNumber(newSize, 'file truncate size');
         const file = BROWSER_RUNTIME.getFileInfo(mod, fileId);
         switch (file?.dataProtocol) {
             case DuckDBDataProtocol.HTTP:
@@ -583,10 +584,11 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    readFile(mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) {
+    readFile(mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number | bigint) {
         fileId = Number(fileId);
         bytes = Number(bytes);
-        location = Number(location);
+        location = wasmToSafeNumber(location, 'file read offset');
+        const [bufStart, bufEnd] = wasmHeapRange(mod, buf, bytes);
         if (bytes == 0) {
             // Be robust to empty reads
             return 0;
@@ -617,7 +619,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                             (xhr.status == 200 && bytes == xhr.response.byteLength && location == 0)
                         ) {
                             const src = new Uint8Array(xhr.response, 0, Math.min(xhr.response.byteLength, bytes));
-                            mod.HEAPU8.set(src, Number(buf));
+                            mod.HEAPU8.set(src, bufStart);
                             return src.byteLength;
                         } else if (xhr.status == 200) {
                             // TODO: here we are actually throwing away all non-relevant bytes, but this is still better than failing
@@ -630,7 +632,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                                 location,
                                 Math.min(xhr.response.byteLength - location, bytes),
                             );
-                            mod.HEAPU8.set(src, Number(buf));
+                            mod.HEAPU8.set(src, bufStart);
                             return src.byteLength;
                         } else {
                             throw new Error(
@@ -649,7 +651,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     }
                     const sliced = handle!.slice(location, location + bytes);
                     const data = new Uint8Array(new FileReaderSync().readAsArrayBuffer(sliced));
-                    mod.HEAPU8.set(data, Number(buf));
+                    mod.HEAPU8.set(data, bufStart);
                     return data.byteLength;
                 }
                 case DuckDBDataProtocol.BROWSER_FSACCESS: {
@@ -657,7 +659,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                     if (!handle) {
                         throw new Error(`No OPFS access handle registered with name: ${file.fileName}`);
                     }
-                    const out = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
+                    const out = mod.HEAPU8.subarray(bufStart, bufEnd);
                     return handle.read(out, { at: location });
                 }
             }
@@ -668,17 +670,18 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
             return 0;
         }
     },
-    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
+    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number | bigint) => {
         fileId = Number(fileId);
         bytes = Number(bytes);
-        location = Number(location);
+        location = wasmToSafeNumber(location, 'file write offset');
+        const [bufStart, bufEnd] = wasmHeapRange(mod, buf, bytes);
         const file = BROWSER_RUNTIME.getFileInfo(mod, fileId);
         switch (file?.dataProtocol) {
             case DuckDBDataProtocol.HTTP:
                 failWith(mod, 'Cannot write to HTTP file');
                 return 0;
             case DuckDBDataProtocol.S3: {
-                const buffer = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
+                const buffer = mod.HEAPU8.subarray(bufStart, bufEnd);
                 const xhr = new XMLHttpRequest();
                 xhr.open('PUT', getHTTPUrl(file?.s3Config, file.dataUrl!), false);
                 addS3Headers(xhr, file?.s3Config, file.dataUrl!, 'PUT', '', buffer);
@@ -697,7 +700,7 @@ export const BROWSER_RUNTIME: DuckDBRuntime & {
                 if (!handle) {
                     throw new Error(`No OPFS access handle registered with name: ${file.fileName}`);
                 }
-                const input = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
+                const input = mod.HEAPU8.subarray(bufStart, bufEnd);
                 return handle.write(input, { at: location });
             }
         }

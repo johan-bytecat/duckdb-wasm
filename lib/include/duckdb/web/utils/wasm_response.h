@@ -1,6 +1,7 @@
 #ifndef INCLUDE_DUCKDB_WEB_UTILS_WASM_RESPONSE_H_
 #define INCLUDE_DUCKDB_WEB_UTILS_WASM_RESPONSE_H_
 
+#include <cstddef>
 #include <cstdint>
 
 #include "arrow/io/buffered.h"
@@ -35,6 +36,10 @@ struct WASMResponse {
     double dataSize = 0;
 #endif
 } __attribute((packed));
+static_assert(sizeof(WASMResponse) == 24, "WASMResponse JavaScript ABI must remain 24 bytes");
+static_assert(offsetof(WASMResponse, statusCode) == 0, "WASMResponse.statusCode ABI offset changed");
+static_assert(offsetof(WASMResponse, dataOrValue) == 8, "WASMResponse.dataOrValue ABI offset changed");
+static_assert(offsetof(WASMResponse, dataSize) == 16, "WASMResponse.dataSize ABI offset changed");
 
 class WASMResponseBuffer {
    protected:

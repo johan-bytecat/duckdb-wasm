@@ -38,7 +38,7 @@ TEST(JSONDataView, Select1) {
     auto chunk = result->Fetch();
 
     additional_buffers_t buffers;
-    std::vector<double> data_ptrs;
+    std::vector<uintptr_t> data_ptrs;
     auto view = CreateDataView(doc, *chunk, data_ptrs, buffers);
     ASSERT_TRUE(view.ok());
     auto value = std::move(view.ValueUnsafe());

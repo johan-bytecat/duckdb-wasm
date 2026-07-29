@@ -1,4 +1,4 @@
-import { DuckDBRuntime, isWasm64 } from './runtime';
+import { DuckDBRuntime, isWasm64, wasmHeapRange, wasmToHeapIndex } from './runtime';
 import { DuckDBModule } from './duckdb_module';
 
 const TEXT_ENCODER = new TextEncoder();
@@ -7,11 +7,12 @@ const TEXT_DECODER = new TextDecoder('utf-8');
 function storeError(mod: DuckDBModule, response: number | bigint, message: string) {
     const msgBuffer = TEXT_ENCODER.encode(message);
     const heapAddr = mod._malloc(msgBuffer.byteLength);
-    const heapArray = mod.HEAPU8.subarray(Number(heapAddr), Number(heapAddr) + msgBuffer.byteLength);
+    const [messageStart, messageEnd] = wasmHeapRange(mod, heapAddr, msgBuffer.byteLength);
+    const heapArray = mod.HEAPU8.subarray(messageStart, messageEnd);
     heapArray.set(msgBuffer);
-    if (isWasm64) {
+    if (isWasm64(mod)) {
         const view = new DataView(mod.HEAPU8.buffer);
-        const offset = Number(response);
+        const offset = wasmToHeapIndex(mod, response, 'UDF response pointer');
         view.setBigInt64(offset, BigInt(1), true);
         view.setBigInt64(offset + 8, BigInt(heapAddr), true);
         view.setBigInt64(offset + 16, BigInt(msgBuffer.byteLength), true);
@@ -41,7 +42,7 @@ function getTypeSize(ptype: string) {
 }
 
 function ptrToArray(mod: DuckDBModule, ptr: number | bigint, ptype: string, n: number) {
-    const p = Number(ptr);
+    const p = wasmToHeapIndex(mod, ptr, `${ptype} buffer pointer`);
     const heap = mod.HEAPU8.subarray(p, p + n * getTypeSize(ptype));
     switch (ptype) {
         case 'UINT8':
@@ -62,14 +63,33 @@ function ptrToArray(mod: DuckDBModule, ptr: number | bigint, ptype: string, n: n
 }
 
 function ptrToUint8Array(mod: DuckDBModule, ptr: number | bigint, n: number) {
-    const p = Number(ptr);
+    const p = wasmToHeapIndex(mod, ptr, 'byte buffer pointer');
     const heap = mod.HEAPU8.subarray(p, p + n);
     return new Uint8Array(heap.buffer, heap.byteOffset, n);
 }
-function ptrToFloat64Array(mod: DuckDBModule, ptr: number | bigint, n: number) {
-    const p = Number(ptr);
-    const heap = mod.HEAPU8.subarray(p, p + n * 8);
-    return new Float64Array(heap.buffer, heap.byteOffset, n);
+function readPointerArray(mod: DuckDBModule, ptr: number | bigint, n: number): Array<number | bigint> {
+    const width = isWasm64(mod) ? 8 : 4;
+    const [start] = wasmHeapRange(mod, ptr, n * width);
+    const view = new DataView(mod.HEAPU8.buffer, start, n * width);
+    return Array.from({ length: n }, (_, i) =>
+        width === 8 ? view.getBigUint64(i * width, true) : view.getUint32(i * width, true),
+    );
+}
+
+function writePointerArray(mod: DuckDBModule, ptr: number | bigint, values: Array<number | bigint>): void {
+    const width = isWasm64(mod) ? 8 : 4;
+    const [start] = wasmHeapRange(mod, ptr, values.length * width);
+    const view = new DataView(mod.HEAPU8.buffer, start, values.length * width);
+    values.forEach((value, i) => {
+        if (width === 8) view.setBigUint64(i * width, BigInt(value), true);
+        else view.setUint32(i * width, Number(value), true);
+    });
+}
+
+function readSizeArray(mod: DuckDBModule, ptr: number | bigint, n: number): number[] {
+    return readPointerArray(mod, ptr, n).map((value, i) =>
+        wasmToHeapIndex(mod, value, `UDF size at index ${i}`),
+    );
 }
 
 interface ArgumentTypeDescription {
@@ -112,9 +132,12 @@ export function callScalarUDF(
             storeError(mod, response, 'Unknown UDF with id: ' + funcId);
             return;
         }
-        const rawDesc = TEXT_DECODER.decode(mod.HEAPU8.subarray(Number(descPtr), Number(descPtr) + descSize));
+        const [descStart, descEnd] = wasmHeapRange(mod, descPtr, descSize);
+        const rawDesc = TEXT_DECODER.decode(mod.HEAPU8.subarray(descStart, descEnd));
         const desc = JSON.parse(rawDesc) as SchemaDescription;
-        const ptrs = ptrToFloat64Array(mod, ptrsPtr, ptrsSize / 8);
+        const pointerWidth = isWasm64(mod) ? 8 : 4;
+        if (ptrsSize % pointerWidth !== 0) throw new Error('malformed UDF pointer table size');
+        const ptrs = readPointerArray(mod, ptrsPtr, ptrsSize / pointerWidth);
 
         const buildResolver = (arg: ArgumentTypeDescription): ArgumentResolver => {
             let validity: Uint8Array | null = null;
@@ -131,7 +154,7 @@ export function callScalarUDF(
                     }
                     const raw = ptrToArray(mod, ptrs[arg.dataBuffer] as number, arg.physicalType, desc.rows);
                     const strings: (string | null)[] = [];
-                    const stringLengths = ptrToFloat64Array(mod, ptrs[arg.lengthBuffer] as number, desc.rows);
+                    const stringLengths = readSizeArray(mod, ptrs[arg.lengthBuffer], desc.rows);
                     for (let j = 0; j < desc.rows; ++j) {
                         if (validity != null && !validity[j]) {
                             strings.push(null);
@@ -199,19 +222,20 @@ export function callScalarUDF(
 
         // Prepare result buffers
         // TODO: we probably do not want to recreate those every time
-        const resultDataLen = desc.rows * getTypeSize(desc.ret.physicalType);
+        const resultDataLen =
+            desc.ret.physicalType === 'VARCHAR' ? desc.rows * pointerWidth : desc.rows * getTypeSize(desc.ret.physicalType);
         const resultDataPtr = mod._malloc(resultDataLen);
-        const resultData = ptrToArray(mod, resultDataPtr, desc.ret.physicalType, desc.rows);
+        const resultData =
+            desc.ret.physicalType === 'VARCHAR'
+                ? new Array<string | undefined | null>(desc.rows)
+                : ptrToArray(mod, resultDataPtr, desc.ret.physicalType, desc.rows);
         const resultValidityPtr = mod._malloc(desc.rows);
         const resultValidity = ptrToUint8Array(mod, resultValidityPtr, desc.rows);
         if (resultData.length == 0 || resultValidity.length == 0) {
             storeError(mod, response, "Can't create physical arrays for result");
             return;
         }
-        let rawResultData = resultData;
-        if (desc.ret.physicalType == 'VARCHAR') {
-            rawResultData = new Array<string | undefined | null>(desc.rows);
-        }
+        const rawResultData: any = resultData;
 
         // Call the function
         const args = [];
@@ -233,8 +257,8 @@ export function callScalarUDF(
             case 'VARCHAR': {
                 // Allocate result buffers
                 const resultDataUTF8 = new Array<Uint8Array>(0); // cough
-                resultLengthsPtr = mod._malloc(desc.rows * getTypeSize('DOUBLE'));
-                const resultLengths = ptrToFloat64Array(mod, resultLengthsPtr, desc.rows);
+                resultLengthsPtr = mod._malloc(desc.rows * pointerWidth);
+                const resultLengths: number[] = [];
 
                 // TODO: We need two loops to figure out the total length but maybe we can avoid the double allocation
                 let totalLength = 0;
@@ -247,34 +271,32 @@ export function callScalarUDF(
 
                 // We malloc a buffer for the strings to live in for now
                 const resultStringPtr = mod._malloc(totalLength);
-                const resultStringBuf = mod.HEAPU8.subarray(resultStringPtr, resultStringPtr + totalLength);
+                const [stringStart, stringEnd] = wasmHeapRange(mod, resultStringPtr, totalLength);
+                const resultStringBuf = mod.HEAPU8.subarray(stringStart, stringEnd);
 
                 // Now copy all the strings to the new buffer back to back
                 let writerOffset = 0;
                 for (let row = 0; row < desc.rows; ++row) {
-                    resultData[row] = writerOffset;
+                    rawResultData[row] = BigInt(resultStringPtr) + BigInt(writerOffset);
                     const resultUTF8 = resultDataUTF8[row];
                     const writer = resultStringBuf.subarray(writerOffset, writerOffset + resultUTF8.length);
                     writer.set(resultUTF8);
                     writerOffset += resultUTF8.length;
                 }
+                writePointerArray(mod, resultDataPtr, rawResultData);
+                writePointerArray(mod, resultLengthsPtr, resultLengths);
             }
         }
 
         // Need to store three pointers, data, validity and length
-        const retLen = 3 * 8;
+        const retLen = 3 * pointerWidth;
         const retPtr = mod._malloc(retLen);
-        // This buffer is consumed as double* by CallScalarUDFFunction for both
-        // memory models. Only the outer WASMResponse changes layout in wasm64.
-        const retBuffer = ptrToFloat64Array(mod, retPtr, 3);
-        retBuffer[0] = Number(resultDataPtr);
-        retBuffer[1] = Number(resultValidityPtr);
-        retBuffer[2] = Number(resultLengthsPtr);
+        writePointerArray(mod, retPtr, [resultDataPtr, resultValidityPtr, resultLengthsPtr]);
 
         // Pack response
-        if (isWasm64) {
+        if (isWasm64(mod)) {
             const view = new DataView(mod.HEAPU8.buffer);
-            const offset = Number(response);
+            const offset = wasmToHeapIndex(mod, response, 'UDF response pointer');
             view.setBigInt64(offset, BigInt(0), true);
             view.setBigInt64(offset + 8, BigInt(retPtr), true);
             view.setBigInt64(offset + 16, BigInt(0), true);

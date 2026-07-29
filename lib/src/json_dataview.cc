@@ -37,11 +37,11 @@ namespace json {
 namespace {
 
 template <typename T>
-std::pair<T*, size_t> create_additional_buffer(std::vector<double>& data_ptrs, additional_buffers_t& additional_buffers,
-                                               idx_t size) {
+std::pair<T*, size_t> create_additional_buffer(std::vector<uintptr_t>& data_ptrs,
+                                               additional_buffers_t& additional_buffers, idx_t size) {
     additional_buffers.emplace_back(unique_ptr<data_t[]>(new data_t[size]));
     auto res_ptr = reinterpret_cast<T*>(additional_buffers.back().get());
-    data_ptrs.push_back(static_cast<double>(reinterpret_cast<uintptr_t>(res_ptr)));
+    data_ptrs.push_back(reinterpret_cast<uintptr_t>(res_ptr));
     return {res_ptr, data_ptrs.size() - 1};
 }
 
@@ -49,7 +49,7 @@ std::pair<T*, size_t> create_additional_buffer(std::vector<double>& data_ptrs, a
 
 /// Serialize a DuckDB Vector as JSON data view
 arrow::Result<rapidjson::Value> CreateDataView(rapidjson::Document& doc, duckdb::DataChunk& chunk,
-                                               std::vector<double>& data_ptrs,
+                                               std::vector<uintptr_t>& data_ptrs,
                                                additional_buffers_t& additional_buffers) {
     auto allocator = doc.GetAllocator();
 
@@ -103,22 +103,21 @@ arrow::Result<rapidjson::Value> CreateDataView(rapidjson::Document& doc, duckdb:
             switch (vec_type.id()) {
                 case LogicalTypeId::INTEGER:
                 case LogicalTypeId::DOUBLE:
-                    data_ptrs.push_back(static_cast<double>(reinterpret_cast<uintptr_t>(vec->GetData())));
+                    data_ptrs.push_back(reinterpret_cast<uintptr_t>(vec->GetData()));
                     desc.AddMember("dataBuffer", rapidjson::Value{static_cast<uint64_t>(data_ptrs.size() - 1)},
                                    allocator);
                     break;
                 case LogicalTypeId::BLOB:
                 case LogicalTypeId::VARCHAR: {
-                    auto [data_ptr, data_idx] =
-                        create_additional_buffer<double>(data_ptrs, additional_buffers, chunk.size() * sizeof(double));
+                    auto [data_ptr, data_idx] = create_additional_buffer<uintptr_t>(data_ptrs, additional_buffers,
+                                                                                    chunk.size() * sizeof(uintptr_t));
                     auto [len_ptr, length_idx] =
-                        create_additional_buffer<double>(data_ptrs, additional_buffers, chunk.size() * sizeof(double));
+                        create_additional_buffer<size_t>(data_ptrs, additional_buffers, chunk.size() * sizeof(size_t));
 
                     auto string_ptr = FlatVector::GetData<string_t>(*vec);
                     for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
-                        data_ptr[row_idx] =
-                            static_cast<double>(reinterpret_cast<ptrdiff_t>(string_ptr[row_idx].GetDataUnsafe()));
-                        len_ptr[row_idx] = static_cast<double>(string_ptr[row_idx].GetSize());
+                        data_ptr[row_idx] = reinterpret_cast<uintptr_t>(string_ptr[row_idx].GetDataUnsafe());
+                        len_ptr[row_idx] = string_ptr[row_idx].GetSize();
                     }
                     desc.AddMember("dataBuffer", rapidjson::Value{static_cast<uint64_t>(data_idx)}, allocator);
                     desc.AddMember("lengthBuffer", rapidjson::Value{static_cast<uint64_t>(length_idx)}, allocator);

@@ -2,13 +2,55 @@ import { DuckDBModule } from './duckdb_module';
 import { UDFFunction } from './udf_function';
 import * as udf_rt from './udf_runtime';
 
-export let isWasm64 = false;
+const MEMORY_MODELS = new WeakMap<DuckDBModule, boolean>();
 export type DuckDBJSType = Emscripten.JSType | 'pointer' | 'bigint';
 
 export function setMemoryModel(mod: DuckDBModule): void {
     const memory64Feature = 1 << 5;
     const features = mod.ccall('duckdb_web_get_feature_flags', 'number', [], []);
-    isWasm64 = (features & memory64Feature) !== 0;
+    MEMORY_MODELS.set(mod, (features & memory64Feature) !== 0);
+}
+
+/** Return whether this particular module uses the Memory64 ABI. */
+export function isWasm64(mod: DuckDBModule): boolean {
+    const result = MEMORY_MODELS.get(mod);
+    if (result === undefined) {
+        throw new Error('DuckDB module memory model has not been initialized');
+    }
+    return result;
+}
+
+/** Convert an ABI integer to an exact, non-negative JavaScript number. */
+export function wasmToSafeNumber(value: number | bigint, label = 'WASM integer'): number {
+    const asBigInt = typeof value === 'bigint' ? value : BigInt(value);
+    if (asBigInt < 0n || asBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new RangeError(`${label} is outside JavaScript's exact integer range: ${asBigInt}`);
+    }
+    return Number(asBigInt);
+}
+
+/** Convert an ABI pointer/size to an exact JavaScript heap index. */
+export function wasmToHeapIndex(mod: DuckDBModule, value: number | bigint, label = 'WASM address'): number {
+    const result = wasmToSafeNumber(value, label);
+    if (result > mod.HEAPU8.byteLength) {
+        throw new RangeError(`${label} ${result} exceeds the WASM heap size ${mod.HEAPU8.byteLength}`);
+    }
+    return result;
+}
+
+/** Validate and convert a pointer/length pair used for a JavaScript heap view. */
+export function wasmHeapRange(
+    mod: DuckDBModule,
+    begin: number | bigint,
+    length: number | bigint,
+): [number, number] {
+    const start = wasmToHeapIndex(mod, begin, 'WASM range start');
+    const size = wasmToHeapIndex(mod, length, 'WASM range length');
+    const end = start + size;
+    if (!Number.isSafeInteger(end) || end > mod.HEAPU8.byteLength) {
+        throw new RangeError(`WASM range [${start}, ${end}) exceeds the heap size ${mod.HEAPU8.byteLength}`);
+    }
+    return [start, end];
 }
 
 export function checkWasm64Support(): boolean {
@@ -47,10 +89,8 @@ export function failWith(mod: DuckDBModule, msg: string): void {
 
 /** Copy a buffer */
 export function copyBuffer(mod: DuckDBModule, begin: number | bigint, length: number | bigint): Uint8Array {
-    if (typeof begin === 'bigint' || typeof length === 'bigint') {
-        return copyBuffer64(mod, BigInt(begin), BigInt(length));
-    }
-    const buffer = mod.HEAPU8.subarray(begin, begin + (length as number));
+    const [start, end] = wasmHeapRange(mod, begin, length);
+    const buffer = mod.HEAPU8.subarray(start, end);
     const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
     copy.set(buffer);
     return copy;
@@ -58,27 +98,18 @@ export function copyBuffer(mod: DuckDBModule, begin: number | bigint, length: nu
 
 /** Decode a string */
 export function readString(mod: DuckDBModule, begin: number | bigint, length: number | bigint): string {
-    if (typeof begin === 'bigint' || typeof length === 'bigint') {
-        return readString64(mod, BigInt(begin), BigInt(length));
-    }
-    return decodeText(mod.HEAPU8.subarray(begin, begin + (length as number)));
+    const [start, end] = wasmHeapRange(mod, begin, length);
+    return decodeText(mod.HEAPU8.subarray(start, end));
 }
 
 /** Copy a buffer from WASM64 heap */
 export function copyBuffer64(mod: DuckDBModule, begin: bigint, length: bigint): Uint8Array {
-    const start = Number(begin);
-    const end = Number(begin + BigInt(length));
-    const buffer = mod.HEAPU8.subarray(start, end);
-    const copy = new Uint8Array(new ArrayBuffer(buffer.byteLength));
-    copy.set(buffer);
-    return copy;
+    return copyBuffer(mod, begin, length);
 }
 
 /** Decode a string from WASM64 heap */
 export function readString64(mod: DuckDBModule, begin: bigint, length: bigint): string {
-    const start = Number(begin);
-    const end = Number(begin + BigInt(length));
-    return decodeText(mod.HEAPU8.subarray(start, end));
+    return readString(mod, begin, length);
 }
 
 /** The data protocol */
@@ -190,7 +221,7 @@ function callSRet64(
     args.unshift(Number(response));
     mod.ccall(funcName, null, argTypes as Array<Emscripten.JSType>, args);
     const view = new DataView(mod.HEAPU8.buffer);
-    const offset = Number(response);
+    const offset = wasmToHeapIndex(mod, response, 'WASM response pointer');
     const status = Number(view.getBigInt64(offset, true));
     const data = view.getBigInt64(offset + 8, true);
     const dataSize = view.getBigInt64(offset + 16, true);
@@ -206,7 +237,7 @@ function packSRet32(mod: DuckDBModule, response: number, a: number, b: number, c
 
 function packSRet64(mod: DuckDBModule, response: number | bigint, a: number | bigint, b: number | bigint, c: number | bigint): void {
     const view = new DataView(mod.HEAPU8.buffer);
-    const offset = Number(response);
+    const offset = wasmToHeapIndex(mod, response, 'WASM response pointer');
     view.setBigInt64(offset, BigInt(a), true);
     view.setBigInt64(offset + 8, BigInt(b), true);
     view.setBigInt64(offset + 16, BigInt(c), true);
@@ -214,7 +245,7 @@ function packSRet64(mod: DuckDBModule, response: number | bigint, a: number | bi
 
 /** Write values into a packed response buffer */
 export function packSRet(mod: DuckDBModule, response: number | bigint, a: number | bigint, b: number | bigint, c: number | bigint): void {
-    if (isWasm64) {
+    if (isWasm64(mod)) {
         packSRet64(mod, response, a, b, c);
     } else {
         packSRet32(mod, response as number, a as number, b as number, c as number);
@@ -229,9 +260,9 @@ export function packFileInfo(
     fileBuffer: number | bigint,
     modificationTime: number,
 ): void {
-    if (isWasm64) {
+    if (isWasm64(mod)) {
         const view = new DataView(mod.HEAPU8.buffer);
-        const offset = Number(response);
+        const offset = wasmToHeapIndex(mod, response, 'opened-file response pointer');
         view.setFloat64(offset, fileSize, true);
         view.setBigUint64(offset + 8, BigInt(fileBuffer), true);
         view.setFloat64(offset + 16, modificationTime, true);
@@ -247,7 +278,7 @@ export function callSRet(
     argTypes: Array<DuckDBJSType>,
     args: Array<any>,
 ): [number, number | bigint, number | bigint] {
-    if (isWasm64) {
+    if (isWasm64(mod)) {
         return callSRet64(mod, funcName, argTypes, args);
     }
     return callSRet32(mod, funcName, argTypes, args);
@@ -273,9 +304,9 @@ export interface DuckDBRuntime {
     closeFile(mod: DuckDBModule, fileId: number): void;
     dropFile(mod: DuckDBModule, fileNamePtr: number | bigint, fileNameLen: number): void;
     getLastFileModificationTime(mod: DuckDBModule, fileId: number): number;
-    truncateFile(mod: DuckDBModule, fileId: number, newSize: number): void;
-    readFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number): number;
-    writeFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number): number;
+    truncateFile(mod: DuckDBModule, fileId: number, newSize: number | bigint): void;
+    readFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number | bigint): number;
+    writeFile(mod: DuckDBModule, fileId: number, buffer: number | bigint, bytes: number, location: number | bigint): number;
 
     // File APIs with path parameter
     removeDirectory(mod: DuckDBModule, pathPtr: number | bigint, pathLen: number): void;
@@ -322,11 +353,11 @@ export const DEFAULT_RUNTIME: DuckDBRuntime = {
     progressUpdate: (_final: number, _percentage: number, _iteration: number): void => {
         return;
     },
-    truncateFile: (_mod: DuckDBModule, _fileId: number, _newSize: number): void => {},
-    readFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number): number => {
+    truncateFile: (_mod: DuckDBModule, _fileId: number, _newSize: number | bigint): void => {},
+    readFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number | bigint): number => {
         return 0;
     },
-    writeFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number): number => {
+    writeFile: (_mod: DuckDBModule, _fileId: number, _buffer: number | bigint, _bytes: number, _location: number | bigint): number => {
         return 0;
     },
 

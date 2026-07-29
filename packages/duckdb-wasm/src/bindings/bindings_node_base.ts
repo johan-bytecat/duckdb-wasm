@@ -1,4 +1,3 @@
-import { DuckDBModule } from './duckdb_module';
 import { DuckDBBindingsBase } from './bindings_base';
 import { DuckDBRuntime } from './runtime';
 import { Logger } from '../log';

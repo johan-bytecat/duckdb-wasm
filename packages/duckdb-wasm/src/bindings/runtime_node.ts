@@ -12,6 +12,8 @@ import {
     packFileInfo,
     isWasm64,
     checkWasm64Support,
+    wasmHeapRange,
+    wasmToSafeNumber,
 } from './runtime';
 import { StatusCode } from '../status';
 import { DuckDBModule } from './duckdb_module';
@@ -94,7 +96,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                     }
                     NODE_RUNTIME._filesById.set(file.fileId, fd);
                     const fileSize = fs.fstatSync(fd).size;
-                    const result = mod._malloc(isWasm64 ? 3 * 8 : 2 * 8);
+                    const result = mod._malloc(isWasm64(mod) ? 3 * 8 : 2 * 8);
                     packFileInfo(mod, result, fileSize, 0, 0);
                     return result;
                 }
@@ -138,10 +140,10 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         return 0;
     },
     dropFile: (mod: DuckDBModule, _fileNamePtr: number | bigint, _fileNameLen: number) => {},
-    truncateFile: (mod: DuckDBModule, fileId: number, newSize: number) => {
+    truncateFile: (mod: DuckDBModule, fileId: number, newSize: number | bigint) => {
         try {
             fileId = Number(fileId);
-            newSize = Number(newSize);
+            newSize = wasmToSafeNumber(newSize, 'file truncate size');
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -160,11 +162,11 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    readFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
+    readFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number | bigint) => {
         try {
             fileId = Number(fileId);
             bytes = Number(bytes);
-            location = Number(location);
+            location = wasmToSafeNumber(location, 'file read offset');
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -173,11 +175,7 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                         failWith(mod, `File ${fileId} is missing a file descriptor`);
                         return 0;
                     }
-                    const bufNum = Number(buf);
-                    if (typeof buf === 'bigint' && !Number.isSafeInteger(bufNum)) {
-                        failWith(mod, `File ${fileId} readFile buffer pointer too large`);
-                        return 0;
-                    }
+                    const [bufNum] = wasmHeapRange(mod, buf, bytes);
                     return fs.readSync(fileHandle, mod.HEAPU8, bufNum, bytes, location);
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:
@@ -192,11 +190,11 @@ export const NODE_RUNTIME: DuckDBRuntime & {
         }
         return 0;
     },
-    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number) => {
+    writeFile: (mod: DuckDBModule, fileId: number, buf: number | bigint, bytes: number, location: number | bigint) => {
         try {
             fileId = Number(fileId);
             bytes = Number(bytes);
-            location = Number(location);
+            location = wasmToSafeNumber(location, 'file write offset');
             const file = NODE_RUNTIME.resolveFileInfo(mod, fileId);
             switch (file?.dataProtocol) {
                 case DuckDBDataProtocol.NODE_FS: {
@@ -205,7 +203,8 @@ export const NODE_RUNTIME: DuckDBRuntime & {
                         failWith(mod, `File ${fileId} is missing a file descriptor`);
                         return 0;
                     }
-                    const src = mod.HEAPU8.subarray(Number(buf), Number(buf) + bytes);
+                    const [bufStart, bufEnd] = wasmHeapRange(mod, buf, bytes);
+                    const src = mod.HEAPU8.subarray(bufStart, bufEnd);
                     return fs.writeSync(fileHandle, src, 0, src.length, location);
                 }
                 case DuckDBDataProtocol.BROWSER_FILEREADER:

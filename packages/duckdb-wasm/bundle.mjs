@@ -251,41 +251,35 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
 
     // -------------------------------
     // WASM64 Browser bundles
-
-    if (wasm64MvpExists) {
-        console.log('[ ESBUILD ] duckdb-browser-mvp64.cjs');
+    const wasm64BrowserVariants = [
+        { name: 'mvp64', exists: wasm64MvpExists },
+        { name: 'eh64', exists: wasm64EhExists },
+        { name: 'coi64', exists: wasm64CoiExists, pthread: true },
+    ];
+    for (const variant of wasm64BrowserVariants.filter(variant => variant.exists)) {
+        for (const format of ['cjs', 'esm']) {
+            const extension = format === 'esm' ? 'mjs' : 'cjs';
+            const outfile = `dist/duckdb-browser-${variant.name}.${extension}`;
+            console.log(`[ ESBUILD ] ${path.basename(outfile)}`);
+            await esbuild.build({
+                entryPoints: ['./src/targets/duckdb.ts'],
+                outfile,
+                platform: 'browser',
+                format,
+                globalName: format === 'esm' ? 'duckdb' : undefined,
+                target: TARGET_BROWSER_WASM64,
+                bundle: true,
+                minify: !is_debug,
+                sourcemap: is_debug ? 'inline' : true,
+                external: EXTERNALS_BROWSER,
+                define: { 'process.release.name': '"browser"' },
+            });
+        }
+        const workerName = `duckdb-browser-${variant.name}.worker.js`;
+        console.log(`[ ESBUILD ] ${workerName}`);
         await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-mvp64.cjs',
-            platform: 'browser',
-            format: 'cjs',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-mvp64.mjs');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-mvp64.mjs',
-            platform: 'browser',
-            format: 'esm',
-            globalName: 'duckdb',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-mvp64.worker.js');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb-browser-mvp64.worker.ts'],
-            outfile: 'dist/duckdb-browser-mvp64.worker.js',
+            entryPoints: [`./src/targets/${workerName.replace('.js', '.ts')}`],
+            outfile: `dist/${workerName}`,
             platform: 'browser',
             format: 'iife',
             globalName: 'duckdb',
@@ -296,112 +290,22 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
             external: EXTERNALS_WEBWORKER,
             define: { 'process.release.name': '"browser"' },
         });
-    }
-
-    if (wasm64EhExists) {
-        console.log('[ ESBUILD ] duckdb-browser-eh64.cjs');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-eh64.cjs',
-            platform: 'browser',
-            format: 'cjs',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-eh64.mjs');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-eh64.mjs',
-            platform: 'browser',
-            format: 'esm',
-            globalName: 'duckdb',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-eh64.worker.js');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb-browser-eh64.worker.ts'],
-            outfile: 'dist/duckdb-browser-eh64.worker.js',
-            platform: 'browser',
-            format: 'iife',
-            globalName: 'duckdb',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_WEBWORKER,
-            define: { 'process.release.name': '"browser"' },
-        });
-    }
-
-    if (wasm64CoiExists) {
-        console.log('[ ESBUILD ] duckdb-browser-coi64.cjs');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-coi64.cjs',
-            platform: 'browser',
-            format: 'cjs',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-coi64.mjs');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb.ts'],
-            outfile: 'dist/duckdb-browser-coi64.mjs',
-            platform: 'browser',
-            format: 'esm',
-            globalName: 'duckdb',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_BROWSER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-coi64.worker.js');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb-browser-coi64.worker.ts'],
-            outfile: 'dist/duckdb-browser-coi64.worker.js',
-            platform: 'browser',
-            format: 'iife',
-            globalName: 'duckdb',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_WEBWORKER,
-            define: { 'process.release.name': '"browser"' },
-        });
-
-        console.log('[ ESBUILD ] duckdb-browser-coi64.pthread.worker.js');
-        await esbuild.build({
-            entryPoints: ['./src/targets/duckdb-browser-coi64.pthread.worker.ts'],
-            outfile: 'dist/duckdb-browser-coi64.pthread.worker.js',
-            platform: 'browser',
-            format: 'iife',
-            target: TARGET_BROWSER_WASM64,
-            bundle: true,
-            minify: !is_debug,
-            sourcemap: is_debug ? 'inline' : true,
-            external: EXTERNALS_WEBWORKER,
-            define: { 'process.release.name': '"browser"' },
-        });
+        if (variant.pthread) {
+            const pthreadWorker = `duckdb-browser-${variant.name}.pthread.worker.js`;
+            console.log(`[ ESBUILD ] ${pthreadWorker}`);
+            await esbuild.build({
+                entryPoints: [`./src/targets/${pthreadWorker.replace('.js', '.ts')}`],
+                outfile: `dist/${pthreadWorker}`,
+                platform: 'browser',
+                format: 'iife',
+                target: TARGET_BROWSER_WASM64,
+                bundle: true,
+                minify: !is_debug,
+                sourcemap: is_debug ? 'inline' : true,
+                external: EXTERNALS_WEBWORKER,
+                define: { 'process.release.name': '"browser"' },
+            });
+        }
     }
 
     // -------------------------------

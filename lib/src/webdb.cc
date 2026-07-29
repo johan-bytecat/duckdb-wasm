@@ -502,11 +502,11 @@ class SharedVectorBuffer : public VectorBuffer {
 
 typedef vector<unique_ptr<data_t[]>> additional_buffers_t;
 
-static data_ptr_t create_additional_buffer(vector<double>& data_ptrs, additional_buffers_t& additional_buffers,
+static data_ptr_t create_additional_buffer(vector<uintptr_t>& data_ptrs, additional_buffers_t& additional_buffers,
                                            idx_t size, int64_t& buffer_idx) {
     additional_buffers.emplace_back(unique_ptr<data_t[]>(new data_t[size]));
     auto res_ptr = additional_buffers.back().get();
-    data_ptrs.push_back(static_cast<double>(reinterpret_cast<uintptr_t>(res_ptr)));
+    data_ptrs.push_back(reinterpret_cast<uintptr_t>(res_ptr));
     buffer_idx = data_ptrs.size() - 1;
     return res_ptr;
 }
@@ -524,7 +524,7 @@ arrow::Status WebDB::Connection::CallScalarUDFFunction(UDFFunctionDeclaration& f
     // TODO create the descriptor in the bind phase for performance
     // TODO special handling if all arguments are non-NULL for performance
     additional_buffers_t additional_buffers;
-    vector<double> data_ptrs;
+    vector<uintptr_t> data_ptrs;
     rapidjson::Document desc_doc;
     {
         auto json_alloc = desc_doc.GetAllocator();
@@ -545,7 +545,7 @@ arrow::Status WebDB::Connection::CallScalarUDFFunction(UDFFunctionDeclaration& f
     // actually call the UDF
     WASMResponse response;
     duckdb_web_udf_scalar_call(&response, function.function_id, desc_buffer.GetString(), desc_buffer.GetLength(),
-                               data_ptrs.data(), data_ptrs.size() * sizeof(uint64_t));
+                               data_ptrs.data(), data_ptrs.size() * sizeof(uintptr_t));
     // UDF call failed?
     if (response.statusCode != 0) {
         uintptr_t err_ptr = response.dataOrValue;
@@ -555,9 +555,8 @@ arrow::Status WebDB::Connection::CallScalarUDFFunction(UDFFunctionDeclaration& f
     }
 
     // Unpack result buffer, first entry is data, second is validity, third is length (strings/lists)
-    auto res_arr = reinterpret_cast<double*>(static_cast<uintptr_t>(response.dataOrValue));
-    auto validity_arr =
-        reinterpret_cast<uint8_t*>(static_cast<uintptr_t>(res_arr[1]));  // TODO WTF why is this 2 and not 1?
+    auto res_arr = reinterpret_cast<uintptr_t*>(static_cast<uintptr_t>(response.dataOrValue));
+    auto validity_arr = reinterpret_cast<uint8_t*>(res_arr[1]);
     for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
         FlatVector::SetNull(out, row_idx, !validity_arr[row_idx]);
     }
@@ -565,19 +564,19 @@ arrow::Status WebDB::Connection::CallScalarUDFFunction(UDFFunctionDeclaration& f
     // Special handling for strings, we need to interpret the funky pointers and the lengths
     // basically inverse of what happens above for strings
     if (out.GetType().id() == LogicalTypeId::VARCHAR) {
-        auto string_ptr_buf = reinterpret_cast<double*>(static_cast<uintptr_t>(res_arr[0]));
+        auto string_ptr_buf = reinterpret_cast<uintptr_t*>(res_arr[0]);
         auto out_string_ptr = FlatVector::GetData<string_t>(out);
-        auto len_buf = reinterpret_cast<double*>(static_cast<uintptr_t>(res_arr[2]));
+        auto len_buf = reinterpret_cast<size_t*>(res_arr[2]);
         for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
             if (!validity_arr[row_idx]) {
                 continue;
             }
-            auto string_ptr = reinterpret_cast<const char*>(static_cast<uintptr_t>(string_ptr_buf[row_idx]));
+            auto string_ptr = reinterpret_cast<const char*>(string_ptr_buf[row_idx]);
             out_string_ptr[row_idx] = StringVector::AddString(out, string_ptr, len_buf[row_idx]);
         }
 
     } else {
-        auto res_buf = reinterpret_cast<char*>(static_cast<uintptr_t>(res_arr[0]));
+        auto res_buf = reinterpret_cast<char*>(res_arr[0]);
         auto shared_buffer = duckdb::make_shared_ptr<SharedVectorBuffer>(std::unique_ptr<char[]>{res_buf});
         out.SetAuxiliary(shared_buffer);
         duckdb::FlatVector::SetData(out, (data_ptr_t)res_buf);

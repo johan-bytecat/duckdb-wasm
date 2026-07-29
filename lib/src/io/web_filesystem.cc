@@ -1,5 +1,6 @@
 #include "duckdb/web/io/web_filesystem.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <mutex>
@@ -24,7 +25,7 @@
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
 
-static const std::function<void(const std::string &, bool)> *list_files_callback = {};
+static const std::function<void(const std::string&, bool)>* list_files_callback = {};
 
 namespace duckdb {
 namespace web {
@@ -44,7 +45,7 @@ static std::mutex LOCAL_STATES_MTX;
 /// The thread local stats
 static std::unordered_map<size_t, std::unique_ptr<LocalState>> LOCAL_STATES;
 /// Get the local state
-static auto &GetLocalState() {
+static auto& GetLocalState() {
     std::unique_lock<std::mutex> fs_guard{LOCAL_STATES_MTX};
     auto tid = GetThreadID();
     auto iter = LOCAL_STATES.find(tid);
@@ -63,12 +64,12 @@ static void ClearLocalStates() {
 /// This is only used for tests.
 static std::unique_ptr<duckdb::FileSystem> NATIVE_FS = duckdb::FileSystem::CreateLocal();
 /// Get or open a file and throw if something is off
-static duckdb::FileHandle &GetOrOpen(size_t file_id) {
+static duckdb::FileHandle& GetOrOpen(size_t file_id) {
     auto file = WebFileSystem::Get()->GetFile(file_id);
     if (!file) {
         throw std::runtime_error("unknown file");
     }
-    auto &infos = GetLocalState();
+    auto& infos = GetLocalState();
     switch (file->GetDataProtocol()) {
         case WebFileSystem::DataProtocol::BROWSER_FSACCESS:
         case WebFileSystem::DataProtocol::BROWSER_FILEREADER:
@@ -106,15 +107,27 @@ struct OpenedFile {
     /// The file time_t
     double file_last_modification;
 };
+static_assert(sizeof(OpenedFile) == 24, "OpenedFile JavaScript ABI must remain 24 bytes");
+static_assert(offsetof(OpenedFile, file_size) == 0, "OpenedFile.file_size ABI offset changed");
+static_assert(offsetof(OpenedFile, file_buffer) == 8, "OpenedFile.file_buffer ABI offset changed");
+static_assert(offsetof(OpenedFile, file_last_modification) == 16,
+              "OpenedFile.file_last_modification ABI offset changed");
 
 #ifdef EMSCRIPTEN
 #define RT_FN(FUNC, IMPL) extern "C" FUNC;
 #else
 #define RT_FN(FUNC, IMPL) FUNC IMPL;
 #endif
+#ifdef WASM_MEMORY64
+using JSFileOffset = int64_t;
+#else
+// Preserve the legacy wasm32 JS ABI, where doubles exactly represent every
+// addressable byte offset. Memory64 uses an actual i64/BigInt boundary.
+using JSFileOffset = double;
+#endif
 RT_FN(uint32_t duckdb_web_fs_get_default_data_protocol(), { return io::WebFileSystem::DataProtocol::NODE_FS; });
-RT_FN(void *duckdb_web_fs_file_open(size_t file_id, uint8_t flags), {
-    auto &file = GetOrOpen(file_id);
+RT_FN(void* duckdb_web_fs_file_open(size_t file_id, uint8_t flags), {
+    auto& file = GetOrOpen(file_id);
     auto result = std::make_unique<OpenedFile>();
     result->file_size = file.GetFileSize();
     result->file_last_modification = std::nullopt;  // This should be 'new Date().getTime() / 1000;'
@@ -123,53 +136,49 @@ RT_FN(void *duckdb_web_fs_file_open(size_t file_id, uint8_t flags), {
 });
 RT_FN(void duckdb_web_fs_file_sync(size_t file_id), { NATIVE_FS->FileSync(GetOrOpen(file_id)); });
 RT_FN(void duckdb_web_fs_file_close(size_t file_id), {
-    auto &infos = GetLocalState();
+    auto& infos = GetLocalState();
     infos.handles.erase(file_id);
 });
-RT_FN(void duckdb_web_fs_file_drop_file(const char *fileName, size_t pathLen), {});
-RT_FN(void duckdb_web_fs_file_truncate(size_t file_id, double new_size), { GetOrOpen(file_id).Truncate(new_size); });
+RT_FN(void duckdb_web_fs_file_drop_file(const char* fileName, size_t pathLen), {});
+RT_FN(void duckdb_web_fs_file_truncate(size_t file_id, JSFileOffset new_size),
+      { GetOrOpen(file_id).Truncate(new_size); });
 RT_FN(time_t duckdb_web_fs_file_get_last_modified_time(size_t file_id), {
-    auto &file = GetOrOpen(file_id);
+    auto& file = GetOrOpen(file_id);
     return NATIVE_FS->GetLastModifiedTime(file);
 });
-RT_FN(ssize_t duckdb_web_fs_file_read(size_t file_id, void *buffer, ssize_t bytes, double location), {
-    auto &file = GetOrOpen(file_id);
+RT_FN(ssize_t duckdb_web_fs_file_read(size_t file_id, void* buffer, ssize_t bytes, JSFileOffset location), {
+    auto& file = GetOrOpen(file_id);
     auto file_size = file.GetFileSize();
     auto safe_offset = std::min<int64_t>(file_size, location);
     auto read_here = std::min<int64_t>(file_size - safe_offset, bytes);
     file.Read(buffer, read_here, safe_offset);
     return read_here;
 });
-RT_FN(ssize_t duckdb_web_fs_file_write(size_t file_id, void *buffer, ssize_t bytes, double location), {
-    auto &file = GetOrOpen(file_id);
+RT_FN(ssize_t duckdb_web_fs_file_write(size_t file_id, void* buffer, ssize_t bytes, JSFileOffset location), {
+    auto& file = GetOrOpen(file_id);
     auto file_size = file.GetFileSize();
     auto safe_offset = std::min<int64_t>(file_size, location);
     file.Write(buffer, bytes, location);
     return bytes;
 });
-RT_FN(void duckdb_web_fs_directory_remove(const char *path, size_t pathLen), {
-    NATIVE_FS->RemoveDirectory(std::string{path, pathLen});
-});
-RT_FN(bool duckdb_web_fs_directory_exists(const char *path, size_t pathLen), {
-    return NATIVE_FS->DirectoryExists(std::string{path, pathLen});
-});
-RT_FN(void duckdb_web_fs_directory_create(const char *path, size_t pathLen), {
-    NATIVE_FS->CreateDirectory(std::string{path, pathLen});
-});
-RT_FN(bool duckdb_web_fs_directory_list_files(const char *path, size_t pathLen), { return false; });
-RT_FN(void duckdb_web_fs_glob(const char *path, size_t pathLen), {
-    auto &state = GetLocalState();
+RT_FN(void duckdb_web_fs_directory_remove(const char* path, size_t pathLen),
+      { NATIVE_FS->RemoveDirectory(std::string{path, pathLen}); });
+RT_FN(bool duckdb_web_fs_directory_exists(const char* path, size_t pathLen),
+      { return NATIVE_FS->DirectoryExists(std::string{path, pathLen}); });
+RT_FN(void duckdb_web_fs_directory_create(const char* path, size_t pathLen),
+      { NATIVE_FS->CreateDirectory(std::string{path, pathLen}); });
+RT_FN(bool duckdb_web_fs_directory_list_files(const char* path, size_t pathLen), { return false; });
+RT_FN(void duckdb_web_fs_glob(const char* path, size_t pathLen), {
+    auto& state = GetLocalState();
     state.glob_results = NATIVE_FS->Glob(std::string{path, pathLen});
 });
-RT_FN(void duckdb_web_fs_file_move(const char *from, size_t fromLen, const char *to, size_t toLen), {
-    NATIVE_FS->MoveFile(std::string{from, fromLen}, std::string{to, toLen});
-});
-RT_FN(bool duckdb_web_fs_file_exists(const char *path, size_t pathLen), {
-    return NATIVE_FS->FileExists(std::string{path, pathLen});
-});
+RT_FN(void duckdb_web_fs_file_move(const char* from, size_t fromLen, const char* to, size_t toLen),
+      { NATIVE_FS->MoveFile(std::string{from, fromLen}, std::string{to, toLen}); });
+RT_FN(bool duckdb_web_fs_file_exists(const char* path, size_t pathLen),
+      { return NATIVE_FS->FileExists(std::string{path, pathLen}); });
 #undef RT_FN
 
-extern "C" void duckdb_web_fs_glob_add_path(const char *path) {
+extern "C" void duckdb_web_fs_glob_add_path(const char* path) {
     GetLocalState().glob_results.push_back(std::string{path});
 }
 
@@ -194,20 +203,20 @@ void WebFileSystem::DataBuffer::Resize(size_t n) {
 
 namespace {
 /// The current web filesystem
-static WebFileSystem *WEBFS = nullptr;
+static WebFileSystem* WEBFS = nullptr;
 }  // namespace
 
 /// Get the static web filesystem
-WebFileSystem *WebFileSystem::Get() { return WEBFS; }
+WebFileSystem* WebFileSystem::Get() { return WEBFS; }
 
 /// Resolve readahead
-ReadAheadBuffer *WebFileSystem::WebFileHandle::ResolveReadAheadBuffer(std::shared_lock<SharedMutex> &file_guard) {
+ReadAheadBuffer* WebFileSystem::WebFileHandle::ResolveReadAheadBuffer(std::shared_lock<SharedMutex>& file_guard) {
     auto tid = GetThreadID();
 
     // Already resolved?
     if (readahead_) return readahead_;
     // Check global readahead buffers
-    auto &fs = file_->GetFileSystem();
+    auto& fs = file_->GetFileSystem();
     std::unique_lock<LightMutex> fs_guard{fs.fs_mutex_};
     // Registered in the meantime
     if (readahead_) return readahead_;
@@ -252,8 +261,8 @@ void WebFileSystem::WebFileHandle::Close() {
     DEBUG_TRACE();
     // Find file
     if (!file_) return;
-    auto &file = *file_;
-    auto &fs = file.GetFileSystem();
+    auto& file = *file_;
+    auto& fs = file.GetFileSystem();
     file_ = nullptr;
 
     // Try to lock the file uniquely
@@ -305,12 +314,12 @@ void WebFileSystem::WebFileHandle::Close() {
     file_guard.unlock();
 }
 /// Get the info
-rapidjson::Value WebFileSystem::WebFile::WriteInfo(rapidjson::Document &doc) const {
+rapidjson::Value WebFileSystem::WebFile::WriteInfo(rapidjson::Document& doc) const {
     DEBUG_TRACE();
     // Start the JSON document
     rapidjson::Value value;
     value.SetObject();
-    auto &allocator = doc.GetAllocator();
+    auto& allocator = doc.GetAllocator();
     rapidjson::Value data_url{rapidjson::kNullType};
 
     // Add the JSON document members
@@ -347,7 +356,7 @@ rapidjson::Value WebFileSystem::WebFile::WriteInfo(rapidjson::Document &doc) con
         if (buffered_http_file_) {
             value.AddMember(
                 "s3Config",
-                writeS3Config(const_cast<DuckDBConfigOptions &>(buffered_http_config_options_.value()), allocator),
+                writeS3Config(const_cast<DuckDBConfigOptions&>(buffered_http_config_options_.value()), allocator),
                 allocator);
         } else {
             value.AddMember("s3Config", writeS3Config(filesystem_.config_->duckdb_config_options, allocator),
@@ -373,9 +382,9 @@ WebFileSystem::~WebFileSystem() {
 }
 
 /// Invalidate readaheads
-void WebFileSystem::InvalidateReadAheads(size_t file_id, std::unique_lock<SharedMutex> &file_guard) {
+void WebFileSystem::InvalidateReadAheads(size_t file_id, std::unique_lock<SharedMutex>& file_guard) {
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
-    for (auto &ra : readahead_buffers_) {
+    for (auto& ra : readahead_buffers_) {
         ra.second->Invalidate(file_id);
     }
 }
@@ -469,7 +478,7 @@ void WebFileSystem::DropDanglingFiles() {
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
     std::vector<std::size_t> to_delete;
     to_delete.reserve(files_by_id_.size());
-    for (auto &[file_id, file] : files_by_id_) {
+    for (auto& [file_id, file] : files_by_id_) {
         if (file->handle_count_ == 0) {
             files_by_name_.erase(file->file_name_);
             DropFile(file->file_name_);
@@ -509,7 +518,7 @@ void WebFileSystem::DropFile(std::string_view file_name) {
 }
 
 /// Write the global filesystem info
-rapidjson::Value WebFileSystem::WriteGlobalFileInfo(rapidjson::Document &doc, uint32_t cache_epoch) {
+rapidjson::Value WebFileSystem::WriteGlobalFileInfo(rapidjson::Document& doc, uint32_t cache_epoch) {
     DEBUG_TRACE();
     if (cache_epoch == LoadCacheEpoch()) {
         rapidjson::Value value;
@@ -519,7 +528,7 @@ rapidjson::Value WebFileSystem::WriteGlobalFileInfo(rapidjson::Document &doc, ui
 
     rapidjson::Value value;
     value.SetObject();
-    auto &allocator = doc.GetAllocator();
+    auto& allocator = doc.GetAllocator();
 
     // Add the JSON document members
     value.AddMember("cacheEpoch", rapidjson::Value{LoadCacheEpoch()}, allocator);
@@ -542,7 +551,7 @@ rapidjson::Value WebFileSystem::WriteGlobalFileInfo(rapidjson::Document &doc, ui
 }
 
 /// Write the file info as JSON
-rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document &doc, uint32_t file_id, uint32_t cache_epoch) {
+rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document& doc, uint32_t file_id, uint32_t cache_epoch) {
     DEBUG_TRACE();
     if (cache_epoch == LoadCacheEpoch()) {
         rapidjson::Value value;
@@ -556,12 +565,12 @@ rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document &doc, uint32_t
         value.SetNull();
         return value;
     }
-    auto &file = *iter->second;
+    auto& file = *iter->second;
     return file.WriteInfo(doc);
 }
 
 /// Write the file info as JSON
-rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document &doc, std::string_view file_name,
+rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document& doc, std::string_view file_name,
                                               uint32_t cache_epoch) {
     DEBUG_TRACE();
     if (cache_epoch == LoadCacheEpoch()) {
@@ -583,7 +592,7 @@ rapidjson::Value WebFileSystem::WriteFileInfo(rapidjson::Document &doc, std::str
         value.AddMember("collectStatistics", file_statistics_->TracksFile(file_name), doc.GetAllocator());
         return value;
     }
-    auto &file = *iter->second;
+    auto& file = *iter->second;
     return file.WriteInfo(doc);
 }
 
@@ -627,7 +636,7 @@ void WebFileSystem::IncrementCacheEpoch() {
 }
 
 /// Open a file
-duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url, duckdb::FileOpenFlags flags,
+duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string& url, duckdb::FileOpenFlags flags,
                                                                optional_ptr<FileOpener> opener) {
     DEBUG_TRACE();
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
@@ -676,7 +685,7 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
         case DataProtocol::S3:
             try {
                 // Open the file
-                auto *opened = duckdb_web_fs_file_open(file->file_id_, flags.GetFlagsInternal());
+                auto* opened = duckdb_web_fs_file_open(file->file_id_, flags.GetFlagsInternal());
                 if (opened == nullptr) {
                     if (flags.ReturnNullIfNotExists()) {
                         return nullptr;
@@ -684,15 +693,15 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
                     std::string msg = std::string{"Failed to open file: "} + file->file_name_;
                     throw std::runtime_error(msg);
                 }
-                auto owned = std::unique_ptr<OpenedFile>(static_cast<OpenedFile *>(opened));
+                auto owned = std::unique_ptr<OpenedFile>(static_cast<OpenedFile*>(opened));
                 file->file_size_ = owned->file_size;
                 file->last_modification_time_ = owned->file_last_modification;
 #ifdef WASM_MEMORY64
                 // file_buffer is uint64_t: uint64_t → uintptr_t → char*
-                auto *buffer_ptr = reinterpret_cast<char *>(static_cast<uintptr_t>(owned->file_buffer));
+                auto* buffer_ptr = reinterpret_cast<char*>(static_cast<uintptr_t>(owned->file_buffer));
 #else
                 // file_buffer is double: double → uintptr_t → char*
-                auto *buffer_ptr = reinterpret_cast<char *>(static_cast<uintptr_t>(owned->file_buffer));
+                auto* buffer_ptr = reinterpret_cast<char*>(static_cast<uintptr_t>(owned->file_buffer));
 #endif
 
                 // A buffer was returned, this can happen for 3 reasons:
@@ -719,7 +728,7 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
                     file_guard.lock();
                 }
 
-            } catch (std::exception &e) {
+            } catch (std::exception& e) {
                 /// Something went wrong, abort opening the file
                 fs_guard.lock();
                 files_by_name_.erase(file->file_name_);
@@ -749,10 +758,10 @@ duckdb::unique_ptr<duckdb::FileHandle> WebFileSystem::OpenFile(const string &url
     return handle;
 }
 
-void WebFileSystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, duckdb::idx_t location) {
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+void WebFileSystem::Read(duckdb::FileHandle& handle, void* buffer, int64_t nr_bytes, duckdb::idx_t location) {
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     auto file_size = file_hdl.file_->file_size_;
-    auto reader = static_cast<char *>(buffer);
+    auto reader = static_cast<char*>(buffer);
     file_hdl.position_ = location;
     while (nr_bytes > 0 && location < file_size) {
         auto n = Read(handle, reader, nr_bytes);
@@ -761,13 +770,13 @@ void WebFileSystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_by
     }
 }
 
-int64_t WebFileSystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes) {
+int64_t WebFileSystem::Read(duckdb::FileHandle& handle, void* buffer, int64_t nr_bytes) {
     DEBUG_TRACE();
     assert(nr_bytes < std::numeric_limits<size_t>::max());
     // Get the file handle
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     assert(file_hdl.file_);
-    auto &file = *file_hdl.file_;
+    auto& file = *file_hdl.file_;
     // Read with shared lock to protect against truncation
     std::shared_lock<SharedMutex> file_guard{file.file_mutex_};
     // Perform the actual read
@@ -804,7 +813,7 @@ int64_t WebFileSystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr
         case DataProtocol::HTTP:
         case DataProtocol::S3: {
             if (auto ra = file_hdl.ResolveReadAheadBuffer(file_guard)) {
-                auto reader = [&](auto *out, size_t n, duckdb::idx_t ofs) {
+                auto reader = [&](auto* out, size_t n, duckdb::idx_t ofs) {
                     return duckdb_web_fs_file_read(file.file_id_, out, n, ofs);
                 };
                 auto n = ra->Read(file.file_id_, file.file_size_.value_or(0), buffer, nr_bytes, file_hdl.position_,
@@ -826,10 +835,10 @@ int64_t WebFileSystem::Read(duckdb::FileHandle &handle, void *buffer, int64_t nr
     return 0;
 }
 
-void WebFileSystem::Write(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes, duckdb::idx_t location) {
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+void WebFileSystem::Write(duckdb::FileHandle& handle, void* buffer, int64_t nr_bytes, duckdb::idx_t location) {
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     auto file_size = file_hdl.file_->file_size_;
-    auto writer = static_cast<char *>(buffer);
+    auto writer = static_cast<char*>(buffer);
     file_hdl.position_ = location;
     while (nr_bytes > 0) {
         auto n = Write(handle, writer, nr_bytes);
@@ -838,13 +847,13 @@ void WebFileSystem::Write(duckdb::FileHandle &handle, void *buffer, int64_t nr_b
     }
 }
 
-int64_t WebFileSystem::Write(duckdb::FileHandle &handle, void *buffer, int64_t nr_bytes) {
+int64_t WebFileSystem::Write(duckdb::FileHandle& handle, void* buffer, int64_t nr_bytes) {
     DEBUG_TRACE();
     assert(nr_bytes < std::numeric_limits<size_t>::max());
     // Get the file handle
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     assert(file_hdl.file_);
-    auto &file = *file_hdl.file_;
+    auto& file = *file_hdl.file_;
     // First lock shared to protect against concurrent truncation.
     // XXX Check whether we can downgrade this to a shared lock (-> readahead invalidation).
     std::unique_lock<SharedMutex> file_guard{file.file_mutex_};
@@ -926,25 +935,25 @@ int64_t WebFileSystem::Write(duckdb::FileHandle &handle, void *buffer, int64_t n
     return bytes_read;
 }
 /// Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-int64_t WebFileSystem::GetFileSize(duckdb::FileHandle &handle) {
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+int64_t WebFileSystem::GetFileSize(duckdb::FileHandle& handle) {
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     assert(file_hdl.file_);
     return file_hdl.file_->file_size_.value_or(0);
 }
 /// Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-timestamp_t WebFileSystem::GetLastModifiedTime(duckdb::FileHandle &handle) {
+timestamp_t WebFileSystem::GetLastModifiedTime(duckdb::FileHandle& handle) {
     // Get the file handle
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     assert(file_hdl.file_);
     return timestamp_t(file_hdl.file_->last_modification_time_.value_or(0) * 1000);
 }
 /// Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 /// the file
-void WebFileSystem::Truncate(duckdb::FileHandle &handle, int64_t new_size) {
+void WebFileSystem::Truncate(duckdb::FileHandle& handle, int64_t new_size) {
     DEBUG_TRACE();
-    auto &file_hdl = static_cast<WebFileHandle &>(handle);
+    auto& file_hdl = static_cast<WebFileHandle&>(handle);
     assert(file_hdl.file_);
-    auto &file = *file_hdl.file_;
+    auto& file = *file_hdl.file_;
 
     // Acquire unique file latch
     std::unique_lock<SharedMutex> file_guard{file_hdl.file_->file_mutex_};
@@ -972,20 +981,20 @@ void WebFileSystem::Truncate(duckdb::FileHandle &handle, int64_t new_size) {
     InvalidateReadAheads(file.file_id_, file_guard);
 }
 /// Check if a directory exists
-bool WebFileSystem::DirectoryExists(const std::string &directory, optional_ptr<FileOpener> opener) {
+bool WebFileSystem::DirectoryExists(const std::string& directory, optional_ptr<FileOpener> opener) {
     return duckdb_web_fs_directory_exists(directory.c_str(), directory.size());
 }
 /// Create a directory if it does not exist
-void WebFileSystem::CreateDirectory(const std::string &directory, optional_ptr<FileOpener> opener) {
+void WebFileSystem::CreateDirectory(const std::string& directory, optional_ptr<FileOpener> opener) {
     duckdb_web_fs_directory_create(directory.c_str(), directory.size());
 }
 /// Recursively remove a directory and all files in it
-void WebFileSystem::RemoveDirectory(const std::string &directory, optional_ptr<FileOpener> opener) {
+void WebFileSystem::RemoveDirectory(const std::string& directory, optional_ptr<FileOpener> opener) {
     return duckdb_web_fs_directory_remove(directory.c_str(), directory.size());
 }
 /// List files in a directory, invoking the callback method for each one with (filename, is_dir)
-bool WebFileSystem::ListFiles(const std::string &directory,
-                              const std::function<void(const std::string &, bool)> &callback, FileOpener *opener) {
+bool WebFileSystem::ListFiles(const std::string& directory,
+                              const std::function<void(const std::string&, bool)>& callback, FileOpener* opener) {
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
     list_files_callback = &callback;
     bool result = duckdb_web_fs_directory_list_files(directory.c_str(), directory.size());
@@ -994,7 +1003,7 @@ bool WebFileSystem::ListFiles(const std::string &directory,
 }
 /// Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 /// properties
-void WebFileSystem::MoveFile(const std::string &source, const std::string &target, optional_ptr<FileOpener> opener) {
+void WebFileSystem::MoveFile(const std::string& source, const std::string& target, optional_ptr<FileOpener> opener) {
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
     if (auto iter = files_by_url_.find(source); iter != files_by_url_.end()) {
         auto file = std::move(iter->second);
@@ -1011,21 +1020,21 @@ void WebFileSystem::MoveFile(const std::string &source, const std::string &targe
     duckdb_web_fs_file_move(source.c_str(), source.size(), target.c_str(), target.size());
 }
 /// Check if a file exists
-bool WebFileSystem::FileExists(const std::string &filename, optional_ptr<FileOpener> opener) {
+bool WebFileSystem::FileExists(const std::string& filename, optional_ptr<FileOpener> opener) {
     auto iter = files_by_name_.find(filename);
     if (iter != files_by_name_.end()) return true;
     return duckdb_web_fs_file_exists(filename.c_str(), filename.size());
 }
 /// Remove a file from disk
-void WebFileSystem::RemoveFile(const std::string &filename, optional_ptr<FileOpener> opener) {}
+void WebFileSystem::RemoveFile(const std::string& filename, optional_ptr<FileOpener> opener) {}
 
 /// Sync a file handle to disk
-void WebFileSystem::FileSync(duckdb::FileHandle &handle) {
+void WebFileSystem::FileSync(duckdb::FileHandle& handle) {
     // Noop, runtime writes directly
 }
 
 /// Runs a glob on the file system, returning a list of matching files
-vector<OpenFileInfo> WebFileSystem::Glob(const std::string &path, FileOpener *opener) {
+vector<OpenFileInfo> WebFileSystem::Glob(const std::string& path, FileOpener* opener) {
     std::unique_lock<LightMutex> fs_guard{fs_mutex_};
     std::vector<string> results;
     if (!FileSystem::IsRemoteFile(path)) {
@@ -1036,40 +1045,40 @@ vector<OpenFileInfo> WebFileSystem::Glob(const std::string &path, FileOpener *op
             }
         }
     }
-    auto &state = GetLocalState();
+    auto& state = GetLocalState();
     state.glob_results.clear();
     duckdb_web_fs_glob(path.c_str(), path.size());
-    for (auto &path : state.glob_results) {
+    for (auto& path : state.glob_results) {
         results.push_back(std::move(path));
     }
     std::sort(results.begin(), results.end());
     results.erase(std::unique(results.begin(), results.end()), results.end());
     std::vector<OpenFileInfo> res;
-    for (auto &r : results) {
+    for (auto& r : results) {
         res.push_back(r);
     }
     return std::move(res);
 }
 
 /// Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
-void WebFileSystem::Seek(FileHandle &handle, idx_t location) {
-    static_cast<WebFileHandle &>(handle).position_ = location;
+void WebFileSystem::Seek(FileHandle& handle, idx_t location) {
+    static_cast<WebFileHandle&>(handle).position_ = location;
 }
 /// Reset a file to the beginning (equivalent to Seek(handle, 0) for simple files)
-void WebFileSystem::Reset(FileHandle &handle) { static_cast<WebFileHandle &>(handle).position_ = 0; }
+void WebFileSystem::Reset(FileHandle& handle) { static_cast<WebFileHandle&>(handle).position_ = 0; }
 /// Get the current position in the file
-idx_t WebFileSystem::SeekPosition(FileHandle &handle) { return static_cast<WebFileHandle &>(handle).position_; }
+idx_t WebFileSystem::SeekPosition(FileHandle& handle) { return static_cast<WebFileHandle&>(handle).position_; }
 /// Whether or not we can seek into the file
 bool WebFileSystem::CanSeek() { return true; }
 // Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 // in a file on-disk are much cheaper than e.g. random reads in a file over the network
-bool WebFileSystem::OnDiskFile(FileHandle &handle) { return true; }
+bool WebFileSystem::OnDiskFile(FileHandle& handle) { return true; }
 
 /// Return the name of the filesytem. Used for forming diagnosis messages.
 std::string WebFileSystem::GetName() const { return "WebFileSystem"; }
 
 /// Write the s3 config to a rapidjson value.
-rapidjson::Value WebFileSystem::writeS3Config(DuckDBConfigOptions &extension_options,
+rapidjson::Value WebFileSystem::writeS3Config(DuckDBConfigOptions& extension_options,
                                               rapidjson::Document::AllocatorType allocator) {
     rapidjson::Value s3Config;
     s3Config.SetObject();

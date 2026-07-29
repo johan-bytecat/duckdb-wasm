@@ -41,8 +41,11 @@ afterAll(async () => {
 
 import { testWasm64Parquet, testWasm64ParquetAsync } from './wasm64_parquet.test';
 import { testWasm64Integration, testWasm64IntegrationAsync } from './wasm64_integration.test';
+import { testWasm64RuntimePrimitives } from './wasm64_runtime.test';
+
+testWasm64RuntimePrimitives();
 
 testWasm64Parquet(() => db!);
 testWasm64ParquetAsync(() => adb!);
 testWasm64Integration(() => db!);
-testWasm64IntegrationAsync(() => adb!);
+testWasm64IntegrationAsync(() => adb!, () => true);

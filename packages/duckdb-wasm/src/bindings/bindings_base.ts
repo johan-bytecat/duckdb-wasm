@@ -5,7 +5,7 @@ import { InstantiationProgress } from './progress';
 import { DuckDBBindings } from './bindings_interface';
 import { DuckDBConnection } from './connection';
 import { StatusCode, IsArrowBuffer, IsDuckDBWasmRetry } from '../status';
-import { dropResponseBuffers, DuckDBRuntime, readString, callSRet, copyBuffer, DuckDBDataProtocol, setMemoryModel, isWasm64 } from './runtime';
+import { dropResponseBuffers, DuckDBRuntime, readString, callSRet, copyBuffer, DuckDBDataProtocol, setMemoryModel, isWasm64, wasmToHeapIndex } from './runtime';
 import { CSVInsertOptions, JSONInsertOptions, ArrowInsertOptions } from './insert_options';
 import { ScriptTokens } from './tokens';
 import { FileStatistics } from './file_stats';
@@ -510,7 +510,7 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
         const [s, d, n] = callSRet(
             this.mod,
             'duckdb_web_fs_register_file_buffer',
-            ['string', 'pointer', 'number'],
+            ['string', 'pointer', 'bigint'],
             [name, ptr, buffer.length],
         );
         if (s !== StatusCode.SUCCESS) {
@@ -647,13 +647,13 @@ export abstract class DuckDBBindingsBase implements DuckDBBindings {
                     pointers.push(ret);
                 }
             }
-            if (isWasm64) {
+            if (isWasm64(this.mod)) {
                 pointerOfArray = (this.mod._malloc as any)(pointers.length * 8);
                 if (!pointerOfArray) {
                     throw new Error(`Failed to allocate memory for pointers array`);
                 }
                 const view = new DataView(this.mod.HEAPU8.buffer);
-                const baseOffset = Number(pointerOfArray);
+                const baseOffset = wasmToHeapIndex(this.mod, pointerOfArray, 'drop-files pointer array');
                 for (let i = 0; i < pointers.length; i++) {
                     view.setBigInt64(baseOffset + i * 8, BigInt(pointers[i]), true);
                 }

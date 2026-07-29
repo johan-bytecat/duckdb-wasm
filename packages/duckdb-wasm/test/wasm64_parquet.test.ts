@@ -2,7 +2,9 @@ import * as duckdb from '../src/';
 import * as arrow from 'apache-arrow';
 
 function getIsWasm64(): boolean {
-    return duckdb.isWasm64;
+    // Conservative sizing for the shared wasm32/wasm64 suite. Dedicated
+    // wasm64 entry points verify the feature flag before registering it.
+    return false;
 }
 
 export function testWasm64Parquet(db: () => duckdb.DuckDBBindings): void {

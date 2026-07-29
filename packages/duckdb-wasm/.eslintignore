@@ -2,3 +2,4 @@
 *.js
 *.mjs
 /karma/*.cjs
+src/bindings/duckdb*.js

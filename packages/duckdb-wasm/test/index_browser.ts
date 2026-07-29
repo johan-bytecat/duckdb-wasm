@@ -114,6 +114,9 @@ import { longQueries } from './long_queries.test';
 import { testPivot } from './pivot.test';
 import { testWasm64Parquet, testWasm64ParquetAsync } from './wasm64_parquet.test';
 import { testWasm64Integration, testWasm64IntegrationAsync } from './wasm64_integration.test';
+import { testWasm64RuntimePrimitives } from './wasm64_runtime.test';
+
+testWasm64RuntimePrimitives();
 
 const baseURL = window.location.origin;
 const dataURL = `${baseURL}/data`;

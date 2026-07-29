@@ -46,6 +46,9 @@ afterAll(async () => {
 
 import { testWasm64Parquet, testWasm64ParquetAsync } from './wasm64_parquet.test';
 import { testWasm64Integration, testWasm64IntegrationAsync } from './wasm64_integration.test';
+import { testWasm64RuntimePrimitives } from './wasm64_runtime.test';
+
+testWasm64RuntimePrimitives();
 
 if (variant !== 'coi64') {
     testWasm64Parquet(() => db!);

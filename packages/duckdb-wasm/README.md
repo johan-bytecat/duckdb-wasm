@@ -235,6 +235,8 @@ await conn.close();
 
 DuckDB-Wasm supports 64-bit WebAssembly (Memory64) as an opt-in feature. WASM64 lifts the 4 GB memory ceiling of WASM32, enabling larger databases and queries.
 
+Pointers and `size_t` values remain 64-bit `bigint` values at the WebAssembly boundary. JavaScript typed-array and host filesystem APIs still use `number` offsets, so DuckDB-Wasm performs a checked conversion at the point of heap or host access and rejects values outside the exact non-negative JavaScript integer range (0 through `Number.MAX_SAFE_INTEGER`) instead of silently truncating them. Individual JavaScript buffers also remain subject to the host engine's `ArrayBuffer` limits; large databases should therefore use streamed or filesystem-backed access rather than one monolithic registered buffer.
+
 **Browser requirements:** Chrome >= 109, Firefox >= 119, Safari >= 17, or any browser supporting the [Memory64 proposal](https://github.com/WebAssembly/memory64).
 
 **Node.js requirements:** Node.js >= 20.

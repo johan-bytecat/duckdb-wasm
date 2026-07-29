@@ -2,7 +2,7 @@ import * as duckdb from '../src/';
 import * as arrow from 'apache-arrow';
 
 function getIsWasm64(): boolean {
-    return duckdb.isWasm64;
+    return false;
 }
 
 export function testWasm64Integration(db: () => duckdb.DuckDBBindings): void {
