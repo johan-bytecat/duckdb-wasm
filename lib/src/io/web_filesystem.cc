@@ -130,7 +130,8 @@ RT_FN(void* duckdb_web_fs_file_open(size_t file_id, uint8_t flags), {
     auto& file = GetOrOpen(file_id);
     auto result = std::make_unique<OpenedFile>();
     result->file_size = file.GetFileSize();
-    result->file_last_modification = std::nullopt;  // This should be 'new Date().getTime() / 1000;'
+    // Seconds since epoch as double, cf. 'new Date().getTime() / 1000' on the JS side
+    result->file_last_modification = NATIVE_FS->GetLastModifiedTime(file).value / 1000000.0;
     result->file_buffer = 0;
     return result.release();
 });
@@ -144,7 +145,7 @@ RT_FN(void duckdb_web_fs_file_truncate(size_t file_id, JSFileOffset new_size),
       { GetOrOpen(file_id).Truncate(new_size); });
 RT_FN(time_t duckdb_web_fs_file_get_last_modified_time(size_t file_id), {
     auto& file = GetOrOpen(file_id);
-    return NATIVE_FS->GetLastModifiedTime(file);
+    return static_cast<time_t>(NATIVE_FS->GetLastModifiedTime(file).value / 1000000);
 });
 RT_FN(ssize_t duckdb_web_fs_file_read(size_t file_id, void* buffer, ssize_t bytes, JSFileOffset location), {
     auto& file = GetOrOpen(file_id);
@@ -158,7 +159,7 @@ RT_FN(ssize_t duckdb_web_fs_file_write(size_t file_id, void* buffer, ssize_t byt
     auto& file = GetOrOpen(file_id);
     auto file_size = file.GetFileSize();
     auto safe_offset = std::min<int64_t>(file_size, location);
-    file.Write(buffer, bytes, location);
+    NATIVE_FS->Write(file, buffer, bytes, location);
     return bytes;
 });
 RT_FN(void duckdb_web_fs_directory_remove(const char* path, size_t pathLen),
@@ -170,7 +171,10 @@ RT_FN(void duckdb_web_fs_directory_create(const char* path, size_t pathLen),
 RT_FN(bool duckdb_web_fs_directory_list_files(const char* path, size_t pathLen), { return false; });
 RT_FN(void duckdb_web_fs_glob(const char* path, size_t pathLen), {
     auto& state = GetLocalState();
-    state.glob_results = NATIVE_FS->Glob(std::string{path, pathLen});
+    state.glob_results.clear();
+    for (auto& info : NATIVE_FS->Glob(std::string{path, pathLen})) {
+        state.glob_results.push_back(info.path);
+    }
 });
 RT_FN(void duckdb_web_fs_file_move(const char* from, size_t fromLen, const char* to, size_t toLen),
       { NATIVE_FS->MoveFile(std::string{from, fromLen}, std::string{to, toLen}); });
