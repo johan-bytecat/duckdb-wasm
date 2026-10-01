@@ -23,7 +23,7 @@ export function isWasm64(mod: DuckDBModule): boolean {
 /** Convert an ABI integer to an exact, non-negative JavaScript number. */
 export function wasmToSafeNumber(value: number | bigint, label = 'WASM integer'): number {
     const asBigInt = typeof value === 'bigint' ? value : BigInt(value);
-    if (asBigInt < 0n || asBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (asBigInt < BigInt(0) || asBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new RangeError(`${label} is outside JavaScript's exact integer range: ${asBigInt}`);
     }
     return Number(asBigInt);

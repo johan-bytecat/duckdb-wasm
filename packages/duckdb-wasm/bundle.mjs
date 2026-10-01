@@ -124,6 +124,34 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
         patchFile('./src/bindings/duckdb-coi64.js', 'child_process');
     }
 
+    // Emscripten >= 4 emits `node:`-prefixed requires for Node.js builtins in
+    // the universal (web,node,worker) glue. Obfuscate them the same way so
+    // esbuild leaves them as dynamic requires instead of failing the browser
+    // bundles. This is a no-op for the node bundles (dynamic require works).
+    const NODE_BUILTINS = [
+        'node:child_process',
+        'node:crypto',
+        'node:fs',
+        'node:os',
+        'node:util',
+        'node:vm',
+        'node:worker_threads',
+    ];
+    const PATCHED_BINDINGS = [
+        './src/bindings/duckdb-mvp.js',
+        './src/bindings/duckdb-eh.js',
+        './src/bindings/duckdb-coi.js',
+        './src/bindings/duckdb-coi.pthread.js',
+    ];
+    if (wasm64MvpExists) PATCHED_BINDINGS.push('./src/bindings/duckdb-mvp64.js');
+    if (wasm64EhExists) PATCHED_BINDINGS.push('./src/bindings/duckdb-eh64.js');
+    if (wasm64CoiExists) PATCHED_BINDINGS.push('./src/bindings/duckdb-coi64.js');
+    for (const binding of PATCHED_BINDINGS) {
+        for (const builtin of NODE_BUILTINS) {
+            patchFile(binding, builtin);
+        }
+    }
+
     // -------------------------------
     // Browser bundles
 
@@ -162,7 +190,9 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
         outfile: 'dist/duckdb-browser-blocking.cjs',
         platform: 'browser',
         format: 'cjs',
-        target: TARGET_BROWSER,
+        // Blocking bundles statically include the wasm64 bindings, which
+        // require BigInt syntax (es2020).
+        target: TARGET_BROWSER_WASM64,
         bundle: true,
         minify: !is_debug,
         sourcemap: is_debug ? 'inline' : true,
@@ -179,7 +209,9 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
         outfile: 'dist/duckdb-browser-blocking.mjs',
         platform: 'browser',
         format: 'esm',
-        target: TARGET_BROWSER,
+        // Blocking bundles statically include the wasm64 bindings, which
+        // require BigInt syntax (es2020).
+        target: TARGET_BROWSER_WASM64,
         bundle: true,
         minify: !is_debug,
         sourcemap: is_debug ? 'inline' : true,
@@ -560,12 +592,17 @@ const wasm64CoiExists = copyFileIfExists(path.resolve(src, 'bindings', 'duckdb-c
 })();
 
 function patchFile(fileName, moduleName) {
-    // Patch file to make sure ESBuild doesn't statically analyse and attempt to load "moduleName"
-    // We replace both single and double-quoted module names. The character capture list complexity
-    // is due to the single quote:
-    // - the sed expression is executed within single quotes
-    // - we have to terminate the quotes
-    // - we have to escape the middle quote
-    const sedCommand = `s/require(["'\\'']${moduleName}["'\\''])/["${moduleName}"].map(require)/g`;
-    execSync(`sed -i.bak '${sedCommand}' ${fileName} && rm ${fileName}.bak`);
+    // Patch file to make sure ESBuild doesn't statically analyse and attempt to load "moduleName".
+    // The require is routed through a direct eval so esbuild can no longer resolve it statically,
+    // while Node still evaluates the genuine require and receives the real module object.
+    // (The historical ["mod"].map(require) trick returns an array, breaking callers that use the
+    // module.) The original quote style is preserved so this stays safe inside already-quoted
+    // strings such as the pthread worker bootstrap source embedded in the glue code.
+    const filePath = path.resolve(__dirname, fileName);
+    const content = fs.readFileSync(filePath, 'utf8');
+    const pattern = new RegExp(`require\\((["'])${moduleName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1\\)`, 'g');
+    const patched = content.replace(pattern, (_, quote) => `eval(${quote}require${quote})(${quote}${moduleName}${quote})`);
+    if (patched !== content) {
+        fs.writeFileSync(filePath, patched, 'utf8');
+    }
 }
