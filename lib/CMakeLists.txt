@@ -21,6 +21,16 @@ endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -DDUCKDB_WASM=1 -DFSST_MUST_ALIGN")
 
+# Emscripten >= 4 no longer predefines the legacy EMSCRIPTEN macro on the
+# command line (it is only defined inside <emscripten.h> now, and deprecated
+# there). This codebase (and its Arrow patch) branches on `#ifdef EMSCRIPTEN`
+# to select the JS-runtime implementations over the native test stubs, so
+# define it explicitly to preserve the historical behavior.
+if(EMSCRIPTEN)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DEMSCRIPTEN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEMSCRIPTEN")
+endif()
+
 if(DUCKDB_WASM_LOADABLE_EXTENSIONS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_LOADABLE_EXTENSIONS=1 -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1 -fPIC")
 else()
@@ -156,6 +166,13 @@ if(EMSCRIPTEN)
     set(WASM_MAXIMUM_MEMORY_FLAG "")
   else()
     set(WASM_MAXIMUM_MEMORY_FLAG "-s MAXIMUM_MEMORY=4GB")
+    # Emscripten >= 4 defaults WASM_BIGINT to 1, which emits BigInt literals
+    # into the JS glue that the browser bundles cannot parse for the legacy
+    # browser targets. 32-bit builds don't need BigInt (as with Emscripten
+    # 3.1.x), so disable it explicitly; 64-bit builds keep it (required).
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sWASM_BIGINT=0")
+    set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -sWASM_BIGINT=0")
+    set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -sWASM_BIGINT=0")
   endif()
 
   set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -DDUCKDB_CUSTOM_PLATFORM=${DUCKDB_PLATFORM}")
@@ -170,7 +187,7 @@ endif()
 # dynamic linking works correctly with the memory64 model. The
 # ALLOW_TABLE_GROWTH and FILESYSTEM=1 settings are also compatible.
 if (DUCKDB_WASM_LOADABLE_EXTENSIONS)
-  set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -s FILESYSTEM=1 -s ENVIRONMENT='web,node,worker' -s ALLOW_TABLE_GROWTH -lembind")
+  set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -s FILESYSTEM=1 -s ENVIRONMENT='web,node,worker' -s ALLOW_TABLE_GROWTH")
 
   if ($ENV{USE_GENERATED_EXPORTED_LIST} STREQUAL "yes")
     set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -s MAIN_MODULE=2 -s EXPORTED_FUNCTIONS='@exported_list.txt'")
@@ -297,6 +314,17 @@ if(EMSCRIPTEN)
   add_executable(duckdb_wasm ${CMAKE_SOURCE_DIR}/src/wasm_main.cc)
   target_link_libraries(duckdb_wasm duckdb_web ${THREAD_LIBS})
   set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} ${WASM_LINK_FLAGS_EXT}")
+  # Emscripten >= 4 only attaches HEAP views to the Module object when listed
+  # in EXPORTED_RUNTIME_METHODS (previously always attached). The TS runtime
+  # reads them off the module, so export the full set. 64-bit views only
+  # exist with WASM_BIGINT (memory64 builds); exporting anything missing is
+  # a hard error, so they are conditional.
+  set(WASM_RUNTIME_METHODS
+      "\"ccall\", \"stackSave\", \"stackAlloc\", \"stackRestore\", \"getTempRet0\", \"setTempRet0\", \"HEAP8\", \"HEAP16\", \"HEAP32\", \"HEAPU8\", \"HEAPU16\", \"HEAPU32\", \"HEAPF32\", \"HEAPF64\""
+  )
+  if(WASM_MEMORY64)
+    set(WASM_RUNTIME_METHODS "${WASM_RUNTIME_METHODS}, \"HEAP64\", \"HEAPU64\"")
+  endif()
   message(STATUS "WASM_LINK_FLAGS=${WASM_LINK_FLAGS}")
   set_target_properties(
     duckdb_wasm
@@ -309,7 +337,7 @@ if(EMSCRIPTEN)
       ${WASM_MAXIMUM_MEMORY_FLAG} \
       -s MODULARIZE=1 \
       -s EXPORT_NAME='DuckDB' \
-      -s EXPORTED_RUNTIME_METHODS='[\"ccall\", \"stackSave\", \"stackAlloc\", \"stackRestore\", \"createDyncallWrapper\", \"getTempRet0\", \"setTempRet0\"]' \
+      -s EXPORTED_RUNTIME_METHODS='[${WASM_RUNTIME_METHODS}]' \
       --js-library=${CMAKE_SOURCE_DIR}/js-stubs.js")
 
 endif()

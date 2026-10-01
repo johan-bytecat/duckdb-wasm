@@ -104,12 +104,16 @@ emmake make \
     duckdb_wasm
 fi
 
-js-beautify -v || npm install -g js-beautify
-js-beautify ${BUILD_DIR}/duckdb_wasm.js > ${BUILD_DIR}/beauty.js
+JS_BEAUTIFY="${PROJECT_ROOT}/node_modules/.bin/js-beautify"
+"${JS_BEAUTIFY}" ${BUILD_DIR}/duckdb_wasm.js > ${BUILD_DIR}/beauty.js
 sed 's/case \"__table_base\"/case \"getTempRet0\": return getTempRet0;   case \"__table_base\"/g' ${BUILD_DIR}/beauty.js > ${BUILD_DIR}/beauty_sed.js
 cp ${BUILD_DIR}/beauty_sed.js ${BUILD_DIR}/beauty.js
 cp ${BUILD_DIR}/beauty.js ${BUILD_DIR}/duckdb_wasm.js
-awk '{gsub(/get\(stubs, prop\) \{/,"get(stubs,prop) { if (prop.startsWith(\"invoke_\")) {return createDyncallWrapper(prop.substring(7));}"); print}' ${BUILD_DIR}/beauty.js > ${BUILD_DIR}/beauty2.js
+# Note: emscripten >= 4 resolves invoke_* wrappers for dynamically loaded side
+# modules internally (createInvokeFunction in libdylink), so the historical
+# createDyncallWrapper patching of get(stubs, prop) is obsolete and removed.
+# That helper no longer exists and referencing it breaks linking/loading.
+cp ${BUILD_DIR}/beauty.js ${BUILD_DIR}/beauty2.js
 awk '!(/var [_a-z0-9A-Z]+ = Module\[\"[_a-z0-9A-Z]+\"\] = [0-9]+;/) || /var _duckdb_web/ || /var _main/ || /var _calloc/ || /var _malloc/ || /var _free/ || /var stack/ || /var ___dl_seterr/ || /var __em/ || /var _em/ || /var _pthread/' ${BUILD_DIR}/beauty2.js > ${BUILD_DIR}/duckdb_wasm.js
 
 cp ${BUILD_DIR}/duckdb_wasm.wasm ${DUCKDB_LIB_DIR}/duckdb${SUFFIX}.wasm
@@ -126,6 +130,18 @@ if [ -f ${BUILD_DIR}/duckdb_wasm.worker.js ]; then
   # Expose the module.
   # This will allow us to reuse the generated pthread handler and only overwrite the loading.
   # More info: duckdb-browser-async-coi.pthread.worker.ts
+  printf "\nexport const onmessage = self.onmessage;\nexport function getModule() { return Module; }\nexport function setModule(m) { Module = m; }\n" \
+    >> ${DUCKDB_LIB_DIR}/duckdb${SUFFIX}.pthread.js
+else
+  # Emscripten >= 4 no longer emits a separate <output>.worker.js for -pthread
+  # builds; the pthread worker bootstrap lives in the main module JS, which
+  # detects ENVIRONMENT_IS_PTHREAD at load. Synthesize the .pthread.js wrapper
+  # from the main module the same way as above.
+  sed \
+    -e "s/duckdb_wasm\.wasm/.\/duckdb${SUFFIX}.wasm/g" \
+    -e "s/duckdb_wasm\.js/.\/duckdb${SUFFIX}.js/g" \
+    ${BUILD_DIR}/duckdb_wasm.js > ${DUCKDB_LIB_DIR}/duckdb${SUFFIX}.pthread.js
+
   printf "\nexport const onmessage = self.onmessage;\nexport function getModule() { return Module; }\nexport function setModule(m) { Module = m; }\n" \
     >> ${DUCKDB_LIB_DIR}/duckdb${SUFFIX}.pthread.js
 fi
