@@ -5,8 +5,8 @@
 
 ROOT_DIR:=.
 
-UID=${shell id -u}
-GID=${shell id -g}
+HOST_UID:=${shell id -u}
+HOST_GID:=${shell id -g}
 
 LIB_SOURCE_DIR="${ROOT_DIR}/lib"
 LIB_DEBUG_DIR="${ROOT_DIR}/build/Debug"
@@ -19,7 +19,18 @@ TARGET=eh
 DUCKDB_HASH=${shell cd submodules/duckdb && git reflog -n 1 | head -c 10}
 
 CACHE_DIRS=${ROOT_DIR}/.ccache/ ${ROOT_DIR}/.emscripten_cache/
-DOCKER_EXEC_ENVIRONMENT=docker compose run duckdb-wasm-ci
+DOCKER_EXEC_ENVIRONMENT=HOST_UID=${HOST_UID} HOST_GID=${HOST_GID} docker compose run --rm --user ${HOST_UID}:${HOST_GID} duckdb-wasm-ci
+
+# Recipes run in separate shells, so selecting the execution environment in the
+# set_environment recipe cannot affect later recipes. Select it while parsing
+# the Makefile instead, while still allowing callers to override it.
+ifndef EXEC_ENVIRONMENT
+ifeq ($(shell command -v emcc 2>/dev/null),)
+EXEC_ENVIRONMENT:=${DOCKER_EXEC_ENVIRONMENT}
+else
+EXEC_ENVIRONMENT:=
+endif
+endif
 
 CORES=$(shell grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu)
 
@@ -47,7 +58,13 @@ check_format:
 # Building
 .PHONY: set_environment
 set_environment:
-	command -v emcc &> /dev/null && EXEC_ENVIRONMENT="" && echo '\033[1m=== Using native mode ===\033[0m' && echo 'Emscripten from' && which emcc || (EXEC_ENVIRONMENT=echo ${DOCKER_EXEC_ENVIRONMENT} && echo '\033[1m === Using docker environment === \033[0m')
+ifeq (${EXEC_ENVIRONMENT},)
+	@echo '\033[1m=== Using native mode ===\033[0m'
+	@echo 'Emscripten from'
+	@command -v emcc
+else
+	@echo '\033[1m=== Using docker environment ===\033[0m'
+endif
 
 build/data:
 	${ROOT_DIR}/scripts/generate_uni.sh
@@ -219,17 +236,15 @@ bench_system_tpch_duckdb: bench_build build/data
 .PHONY: wasm_caches
 wasm_caches: $(DUCKDB_SOURCES)
 	mkdir -p ${ROOT_DIR}/.ccache ${ROOT_DIR}/.emscripten_cache
-	chown -R $(id -u):$(id -g) ${ROOT_DIR}/.ccache ${ROOT_DIR}/.emscripten_cache
 	rm -rf ${EXTENSION_CACHE_DIR}
 	mkdir -p ${EXTENSION_CACHE_DIR}
-	chown -R $(id -u):$(id -g) ${EXTENSION_CACHE_DIR}
 	mkdir -p ${CACHE_DIRS}
 ifeq (${DUCKDB_JSON}, 1)
 	touch ${JSON_EXTENSION_CACHE_FILE}
 endif
 
 wrapped_wasm_caches:
-	${EXEC_ENVIRONMENT} make wasm_caches
+	make wasm_caches
 	mkdir -p build
 	touch build/wrapped_wasm_caches
 

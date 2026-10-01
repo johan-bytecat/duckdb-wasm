@@ -6,8 +6,8 @@ services:
     build:
       context: ./actions/image
       args:
-        - GID=0
-        - UID=0
+        - GID=${HOST_GID:-1000}
+        - UID=${HOST_UID:-1000}
     volumes:
       - .:/wd
       - ./.ccache:/mnt/ccache
