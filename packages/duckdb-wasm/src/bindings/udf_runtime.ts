@@ -56,7 +56,11 @@ function ptrToArray(mod: DuckDBModule, ptr: number | bigint, ptype: string, n: n
         case 'DOUBLE':
             return new Float64Array(heap.buffer, heap.byteOffset, n);
         case 'VARCHAR':
-            return new Float64Array(heap.buffer, heap.byteOffset, n);
+            // VARCHAR data buffers hold pointer-sized entries (uintptr_t in
+            // json_dataview.cc), not 8-byte doubles. On wasm32 that is 4 bytes.
+            return isWasm64(mod)
+                ? new Float64Array(heap.buffer, heap.byteOffset, n)
+                : new Uint32Array(heap.buffer, heap.byteOffset, n);
         default:
             return new Array<string | undefined | null>(0); // cough
     }
@@ -153,16 +157,19 @@ export function callScalarUDF(
                         throw new Error('malformed data view, expected data length buffer for VARCHAR argument');
                     }
                     const raw = ptrToArray(mod, ptrs[arg.dataBuffer] as number, arg.physicalType, desc.rows);
+                    // Read raw size values without range-checking: NULL rows may carry
+                    // garbage sizes from the C++ side and must be skipped via validity.
+                    const rawSizes = readPointerArray(mod, ptrs[arg.lengthBuffer], desc.rows);
                     const strings: (string | null)[] = [];
-                    const stringLengths = readSizeArray(mod, ptrs[arg.lengthBuffer], desc.rows);
                     for (let j = 0; j < desc.rows; ++j) {
                         if (validity != null && !validity[j]) {
                             strings.push(null);
                             continue;
                         }
+                        const stringLength = wasmToHeapIndex(mod, rawSizes[j], `UDF size at index ${j}`);
                         const subarray = mod.HEAPU8.subarray(
                             raw[j] as number,
-                            (raw[j] as number) + (stringLengths[j] as number),
+                            (raw[j] as number) + stringLength,
                         );
                         const str = TEXT_DECODER.decode(subarray);
                         strings.push(str);
