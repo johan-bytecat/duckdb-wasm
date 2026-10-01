@@ -102,6 +102,133 @@ make apply_patches
 make serve
 ```
 
+### Prerequisites
+
+An Emscripten toolchain is required. CI pins **EMSDK 3.1.71** (see `actions/image/Dockerfile`); the codebase also builds with **Emscripten >= 4** (tested with 6.0.3). If `emcc` is not on `PATH`, the Makefile falls back to the Docker CI image automatically.
+
+When building locally with a manual Emscripten install, export the toolchain first:
+
+```shell
+export PATH="$HOME/.local/share/emsdk/upstream/emscripten:$HOME/.local/share/emsdk/node/<version>_64bit/bin:$PATH"
+```
+
+### Building the wasm libraries
+
+All variants are built via `scripts/wasm_build_lib.sh <build_type> <feature>`:
+
+| Build type | Optimization |
+|------------|--------------|
+| `debug`    | `-O0`        |
+| `relsize`  | `-Os`        |
+| `relperf`  | `-O3`        |
+| `dev`      | `-O2`        |
+
+| Feature | Description |
+|---------|-------------|
+| `mvp`   | MVP (no exceptions, no threads) |
+| `eh`    | Exception handling |
+| `coi`   | Cross-origin isolated (threads) |
+
+**wasm32** (default, 32-bit pointers, 4 GB memory ceiling):
+
+```shell
+# All three features, release-for-size
+for f in mvp eh coi; do
+  ./scripts/wasm_build_lib.sh relsize $f
+done
+
+# Or use the Makefile wrapper (builds relperf for mvp/eh/coi)
+make wasm
+```
+
+**wasm64** (64-bit pointers, lifts the 4 GB ceiling):
+
+```shell
+# Set WASM_MEMORY64=1; pass the feature WITHOUT a "64" suffix —
+# the script appends "MEM64" to the build directory and platform itself.
+for f in mvp eh coi; do
+  WASM_MEMORY64=1 ./scripts/wasm_build_lib.sh relsize $f
+done
+
+# Or use the Makefile wrapper
+make wasm64            # relperf
+make wasm64_relsize    # relsize
+make wasm64_dev        # dev
+```
+
+> **Note:** Passing a feature with a `64` suffix (e.g. `mvp64`) while `WASM_MEMORY64=1` is set produces incorrect paths like `mvp6464`. The suffix is added automatically.
+
+Output artifacts land in `packages/duckdb-wasm/src/bindings/` as `duckdb-<feature>.js`, `duckdb-<feature>.wasm`, and (for `coi`) `duckdb-<feature>.pthread.js`.
+
+### Building the JS bundles
+
+After the wasm libraries are built:
+
+```shell
+cd packages/duckdb-wasm
+node bundle.mjs release    # or: debug
+```
+
+This bundles the TypeScript API together with the wasm glue into `dist/`.
+
+### Generating test data
+
+Node and browser tests read Parquet fixtures from `data/uni/`:
+
+```shell
+# From the repo root (requires the Rust dataprep toolchain)
+./scripts/generate_uni.sh
+```
+
+Without this step, Parquet-related tests fail with file-not-found errors.
+
+### Running tests
+
+**wasm32 node tests:**
+
+```shell
+cd packages/duckdb-wasm
+yarn test:node                    # full suite
+yarn test:node --filter="UDF"     # single group
+```
+
+Or from the repo root:
+
+```shell
+make js_tests_node JS_FILTER="UDF"
+```
+
+**wasm64 node tests** (require wasm64 builds of `mvp` and `eh`):
+
+```shell
+cd packages/duckdb-wasm
+yarn test:node:wasm64             # both mvp64 and eh64
+yarn test:node:wasm64:mvp         # mvp64 only
+yarn test:node:wasm64:eh          # eh64 only
+```
+
+The wasm64 entry point is `test/index_node_wasm64.ts`; the variant is selected via the `DUCKDB_WASM64_VARIANT` environment variable (`mvp64` or `eh64`).
+
+**Browser tests:**
+
+```shell
+yarn test:chrome                  # wasm32
+yarn test:chrome:wasm64           # all wasm64 variants (mvp64, eh64, coi64)
+yarn test:chrome:wasm64:mvp       # single variant
+```
+
+### Loadable extensions vs. statically-linked Parquet
+
+Building with `DUCKDB_WASM_LOADABLE_EXTENSIONS=1` (used by `make build_loadable` / `make build_loadable64`) produces side-module extensions that must be loaded at runtime. In this mode **Parquet is not statically linked**, so Parquet tests are expected to fail unless the extension dylib is served and loaded. For a full test pass, build without that flag (the default):
+
+```shell
+# Static build (Parquet included) — use this for tests
+./scripts/wasm_build_lib.sh relsize eh
+
+# Loadable-extension build — Parquet tests will fail
+DUCKDB_WASM_LOADABLE_EXTENSIONS=1 ./scripts/wasm_build_lib.sh relsize eh
+```
+
 ## Repository Structure
 
 | Subproject                                               | Description    | Language   |
